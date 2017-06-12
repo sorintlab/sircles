@@ -1,0 +1,167 @@
+### sircles configuration
+
+# Set to true to enable debug
+# debug: true
+
+# set to false to disable creation of default admin user. Defaults to true.
+# createInitialAdmin: true
+
+
+# AdminMember makes a member an admin also if not defined in the member
+# properties.
+# Should be used only to temporarily give a member admin privileges.
+# This is needed at instance creation when no member is admin to set the
+# admin properties to some members when having createInitialAdmin set to false
+# or as a way to access as admin when there's no other way to do it (USE WITH
+# CAUTION).
+#
+# The provided string needs to be a member UserName (not email).
+# adminMember: "admin"
+
+# The api http endpoint configuration
+web:
+  http: 'localhost:8080'
+  # CORS configuration. If the api endpoint and the ui/clients are on different
+  # domains you should define the ui/clients domains here.
+  # A list of CORS allower origins.
+  #allowedOrigins:
+  #  - '*'
+
+db:
+  # the database type (postgres or sqlite3), use postgres for production and
+  # sqlite only for test
+  type: 'postgres'
+  # an example connection string to a postgres database instance on a sircles db
+  connString: 'postgres://user@db01/sircles?sslmode=disable'
+
+  #type: 'sqlite3'
+  #connString: './sircles.db'
+
+## index configuration
+index:
+  ## path to the directory storing the index. By default uses the system default
+  ## temp dir so it could be removed by temp dir cleanup scripts. Change it to a
+  ## persistent path.
+  ## Currently the index is local (don't put it in a directory shared by
+  ## multiple instances) so every instance will get its own index
+  #path: /path/to/index
+
+# how the jwt token issued on login should be signed, preferred
+tokenSigning:
+  # hmac or rsa (it possible use rsa)
+  type: hmac
+  # key to use when signing with hmac
+  key: supersecretsigningkey
+  # paths to the private and public keys in pem encoding when using rsa signing
+  #privateKeyPath: /path/to/privatekey.pem
+  #publicKeyPath: /path/to/public.pem
+
+# configure member authentication
+authentication:
+
+# type can be: local, ldap, oidc
+  type: local
+    # the user should provided the email instead of the username for authentication
+    #useEmail: true
+
+#  # example ldap configuration
+#  type: ldap
+#  config:
+#    host: "localhost:10636"
+#    rootCA: "path/to/rootCA.pem"
+#
+#    # baseDN for the user search to apply to the search. This can be a golang text template string https://golang.org/pkg/text/template and the provided variables are:
+#    # * LoginName (the login name provided)
+#    # * UserName (the local part if the login is in the format localpart@domain or the same as LoginName)
+#    # * Domain (the domain part if the login is in the format localpart@domain)
+#    # For example, if the login is provided as localpart@domain and your ldap tree is has a domain dependant part you can provide a template like:
+#    # ou=People,o={{.Domain}},dc=myorg,dc=com
+#    baseDN: "ou=People,dc=example,dc=org"
+#
+#    # Filter to apply to the search, a query with this filter must return at most one value. This can be a golang text template string https://golang.org/pkg/text/template and the provided variables are:
+#    # * LoginName (the login name provided)
+#    # * UserName (the local part if the login is in the format localpart@domain or the same as LoginName)
+#    # * Domain (the domain part if the login is in the format localpart@domain)
+#    # For example, if the login is provided as localpart@domain and your uid uses only the username part you can provide a template like
+#    # (uid={{.UserName}})
+#    filter: "(uid={{.UserName}})"
+#
+#    # bindDN to use for executing queries
+#    bindDN:
+#    # bindPW of the bindDN
+#    bindPW:
+#
+#    # Search scope: sub or one (defaults to sub)
+#    # scope: sub
+#
+#    # LDAP attribute used to match an ldap user to the matchUID of a local user
+#    # Defaults to "uid"
+#    # matchAttr: uid
+
+#  # example openid connect configuration
+#  type: oidc
+#  config:
+#    clientID: "example-app"
+#    clientSecret: "ZXhhbXBsZS1hcHAtc2VjcmV0"
+#    issuerURL: "http://127.0.0.1:5556/dex"
+#
+#    # the callback url to be redirected after user login/authorization, this can be
+#    # left empty and only registered in the OIDC idp. It has to be the exposed url
+#    # of the frontend (not this api server). The frontend will then extract the
+#    # code and state or possible error from the redirectURL query parameters,
+#    # verify the state value and send the code the the api server with a POST to
+#    # "/api/auth/login"
+#    redirectURL: "http://127.0.0.1:3000/login/callback"
+#
+#    # claim to be used to match a local user by matchUID, defaults to "sub".
+#    # NOTE on some OIDC IDPs like coreos dex the provided sub is an encoding of
+#    # the dex connector id with the proxied user "sub" so it doesn't expose a "real"
+#    # real user sub.
+#    matchClaim: "sub"
+
+# memberPovider can be defined when you want to create/update the local user using an external source
+# this should be used when using an external authentication method
+memberProvider:
+
+#  # example ldap member provider
+#  type: ldap
+#  config:
+#    host: "localhost:10636"
+#    rootCA: "path/to/rootCA.pem"
+#
+#    # When using the oidc authenticator set this to the OIDC Claim to use as
+#    # search data when receiving an OIDC idToken, defaults to the subject claim
+#    # ("sub")
+#    #oidcClaim: sub
+#
+#    # baseDN for the user search to apply to the search. This can be a golang text template string https://golang.org/pkg/text/template and the provided variables are:
+#    # * LoginName (the login name provided when using a login based authenticator like ldap or the choosed oidcClaim)
+#    # * UserName (the local part if the login is in the format localpart@domain or the same as LoginName)
+#    # * Domain (the domain part if the login is in the format localpart@domain)
+#    # For example, if the login is provided as localpart@domain and your ldap tree is has a domain dependant part you can provide a template like:
+#    # ou=People,o={{.Domain}},dc=myorg,dc=com
+#    baseDN: "ou=People,dc=example,dc=org"
+#
+#    # Filter to apply to the search, a query with this filter must return at most one value. This can be a golang text template string https://golang.org/pkg/text/template and the provided variables are:
+#    # * LoginName (the login name provided when using a login based authenticator like ldap or the choosed oidcClaim)
+#    # * UserName (the local part if the login is in the format localpart@domain or the same as LoginName)
+#    # * Domain (the domain part if the login is in the format localpart@domain)
+#    # For example, if the login is provided as localpart@domain and your uid uses only the username part you can provide a template like
+#    # (uid={{.UserName}})
+#    filter: "(uid={{.UserName}})"
+#
+#    bindDN:
+#    bindPW:
+
+#    # Attributes required for creating a new user. Their value must respect the
+#    # default user fields constraints and so user creation may fail.
+#    matchAttr: uid
+#    userNameAttr: uid
+#    fullNameAttr: cn
+#    emailAttr: mail
+#
+
+
+# TODO(sgotti) add oidc member provider
+#  type: oidc
+#  config:
