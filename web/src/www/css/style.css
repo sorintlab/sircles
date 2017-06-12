@@ -1,0 +1,33 @@
+html, body {
+  word-break: break-word;
+}
+
+.ui.item img {
+  margin-top: -10px;
+  margin-bottom: -10px;
+}
+
+.ui.attached.header .edit {
+  float: right
+}
+
+.ui.form textarea.edit-content {
+  margin-bottom: 8px
+}
+
+.orgchart circle.circle {
+  transition: opacity 0.25s ease-out, color 0.25s ease-out;
+  stroke-width: 1px;
+  stroke: #c7e7e2;
+}
+
+.orgchart circle:hover {
+  stroke-width: 1px;
+  stroke: #919191;
+}
+
+
+.ui.horizontal.label.labelright {
+  vertical-align: top;
+  margin-left: 0.8em;
+}

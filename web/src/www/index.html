@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+        <meta charset="utf-8">
+        <title>Sircles</title>
+
+        <link rel="stylesheet" type="text/css" href="/styles.css">
+</head>
+
+<body>
+        <div id="react-app"></div>
+        <script src="/config.js"/></script>
+        <script>
+        // default config if no config.js is provided
+        if (!window.CONFIG) {
+          const CONFIG = {
+            apiBaseUrl: '/api',
+          }
+          window.CONFIG = CONFIG
+        }
+        </script>
+        <script src="/vendor.bundle.js"/></script>
+        <script src="/app.js"/></script>
+</body>
+</html>

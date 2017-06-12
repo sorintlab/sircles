@@ -1,0 +1,22 @@
+language: go
+
+go:
+  - 1.8.3
+
+env:
+  - TARGET=amd64
+  - TARGET=arm64
+
+addons:
+  apt:
+    packages:
+    - ldap-utils
+    - slapd
+
+install:
+  -
+
+script:
+  # TODO(sgotti) temporarily disabled ldap tests
+  ##SIRCLES_LDAP_TESTS=1 make test
+  make test

@@ -1,0 +1,28 @@
+### sircles basic configuration for the sircles demo docker image
+
+web:
+  http: ':8080'
+
+db:
+  # the database type (postgres or sqlite3), use postgres for production and
+  # sqlite only for test
+  type: 'sqlite3'
+  connString: '/sircles.db'
+
+# how the jwt token issued on login should be signed, preferred
+tokenSigning:
+  # hmac or rsa (it possible use rsa)
+  method: hmac
+  # key to use when signing with hmac
+  key: supersecretsigningkey
+  # paths to the private and public keys in pem encoding when using rsa signing
+  #privateKeyPath: /path/to/privatekey.pem
+  #publicKeyPath: /path/to/public.pem
+
+# configure member authentication
+authentication:
+
+# type can be: local, ldap, oidc
+  type: local
+    # the user should provided the email instead of the username for authentication
+    #useEmail: true

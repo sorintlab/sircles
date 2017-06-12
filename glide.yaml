@@ -1,0 +1,37 @@
+package: github.com/sorintlab/sircles
+import:
+- package: github.com/Masterminds/squirrel
+- package: github.com/dgrijalva/jwt-go
+  version: v3.0.0
+  subpackages:
+  - request
+- package: github.com/gorilla/handlers
+  version: v1.2
+- package: github.com/gorilla/mux
+  version: v1.3.0
+- package: github.com/lib/pq
+- package: github.com/mattn/go-sqlite3
+  version: v1.2.0
+- package: github.com/neelance/graphql-go
+  version: 00c4c5743b2fff2500fbd0643d3a43e297139221
+- package: github.com/nicksrandall/dataloader
+- package: github.com/blevesearch/bleve
+- package: github.com/renstrom/shortuuid
+- package: github.com/satori/go.uuid
+- package: github.com/spf13/cobra
+- package: github.com/dchest/siphash
+  version: v1.0.0
+- package: github.com/pkg/errors
+  version: v0.8.0
+- package: github.com/disintegration/imaging
+  version: v1.1.0
+- package: github.com/coreos/go-oidc
+- package: golang.org/x/oauth2
+- package: gopkg.in/ldap.v2
+- package: github.com/ghodss/yaml
+  version: v1.0.0
+- package: go.uber.org/zap
+  version: v1.3.0
+- package: golang.org/x/crypto
+  subpackages:
+  - bcrypt

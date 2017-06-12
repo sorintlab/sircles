@@ -1,0 +1,20 @@
+# Emacs save files
+*~
+\#*\#
+.\#*
+
+# Vim-related files
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+
+
+bin/
+webbundle/bindata.go
+
+node_modules
+web/dist
+web/semantic
+!web/semantic/src/theme.config
