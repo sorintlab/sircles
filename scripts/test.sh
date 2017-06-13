@@ -1,6 +1,10 @@
 #!/bin/bash
 
+## Test the backend
+
 set -e
+
+echo "== Testing the sircles backend =="
 
 FMTOUT=$(gofmt -l $(find . -type f -name '*.go' | grep -v vendor | grep -v webbundle/bindata.go))
 if [ -n "${FMTOUT}" ]; then
@@ -29,3 +33,18 @@ done
 
 echo "== Total coverage =="
 go tool cover -func ${TMPDIR}/coverprofile | tail -1
+
+
+## Test the ui
+echo
+echo "== Testing the sircles ui =="
+
+# For now just apply the standardjs linter but we really need some willing to add tests
+pushd web/src > /dev/null
+
+echo "=== Runnning standardjs linter ==="
+../node_modules/.bin/standard -v --parser babel-eslint
+
+popd > /dev/null
+
+echo "== done =="

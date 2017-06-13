@@ -3,6 +3,10 @@ language: go
 go:
   - 1.8.3
 
+# make build of forked repos work on travis (the forked repo contents will be
+# copied inside the right path)
+go_import_path: github.com/sorintlab/sircles
+
 env:
   - TARGET=amd64
   - TARGET=arm64
@@ -14,9 +18,13 @@ addons:
     - slapd
 
 install:
-  -
+  - . $HOME/.nvm/nvm.sh
+  - nvm install stable
+  - nvm use stable
 
 script:
+  # build with webbundle so we'll trigger all the ui build process
+  - make
   # TODO(sgotti) temporarily disabled ldap tests
   ##SIRCLES_LDAP_TESTS=1 make test
-  make test
+  - make test
