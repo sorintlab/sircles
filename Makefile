@@ -11,8 +11,6 @@ VERSION ?= $(shell scripts/git-version.sh)
 
 PACKAGES := $(shell go list ./... | grep -v /vendor/)
 
-SIRCLES_BIN = bin/sircles
-
 WEBAPP_SRC := $(shell find web/src -type f)
 SEMANTIC_SRC ?= $(shell find web/semantic/src -type f)
 
@@ -23,14 +21,18 @@ $(shell mkdir -p tools/bin )
 
 export GOBIN=$(PROJDIR)/bin
 
-SIRCLES_SRC := $(shell find . -name '*.go')
-SIRCLES_DEPS = webbundle/bindata.go
-SIRCLES_TAGS = webbundle
+SIRCLES_SRC = $(shell find . -name '*.go' | grep -v "webbundle/bindata.go")
+SIRCLES_DEPS =
+SIRCLES_TAGS =
 
-ifdef NOWEBBUNDLE
-SIRCLES_SRC := $(shell find . -name '*.go' | grep -v "webbundle/bindata.go")
-	SIRCLES_DEPS =
-	SIRCLES_TAGS =
+SIRCLES_WEBBUNDLE_SRC = $(shell find . -name '*.go')
+SIRCLES_WEBBUNDLE_DEPS = webbundle/bindata.go
+SIRCLES_WEBBUNDLE_TAGS = webbundle
+
+ifndef NOWEBBUNDLE
+	SIRCLES_SRC = $(SIRCLES_WEBBUNDLE_SRC)
+	SIRCLES_DEPS = $(SIRCLES_WEBBUNDLE_DEPS)
+	SIRCLES_TAGS = $(SIRCLES_WEBBUNDLE_TAGS)
 endif
 
 .PHONY: all
@@ -43,11 +45,11 @@ build: bin/sircles
 test: tools/bin/gocovmerge
 	@scripts/test.sh
 
-bin/sircles: $(SIRCLES_SRC) $(SIRCLES_DEPS)
+bin/sircles: $(SIRCLES_DEPS) $(SIRCLES_SRC)
 	go install $(if $(SIRCLES_TAGS),-tags $(SIRCLES_TAGS)) -ldflags $(LD_FLAGS) $(REPO_PATH)/cmd/sircles
 
 # build the binary inside a docker container. Now we use a glibc based golang image to match the fedora base image used in the Dockerfile of the demo but can be changed to use a musl libc based image like alpine
-bin/sircles-dockerdemo: $(SIRCLES_SRC) $(SIRCLES_DEPS)
+bin/sircles-dockerdemo: $(SIRCLES_WEBBUNDLE_DEPS) $(SIRCLES_WEBBUNDLE_SRC)
 	docker run --rm -v "$(PROJDIR)":/go/src/$(REPO_PATH) -w /go/src/$(REPO_PATH) golang:1.8 go build -tags webbundle -ldflags $(LD_FLAGS) -o /go/src/${REPO_PATH}/bin/sircles-dockerdemo $(REPO_PATH)/cmd/sircles
 
 .PHONY: dockerdemo
