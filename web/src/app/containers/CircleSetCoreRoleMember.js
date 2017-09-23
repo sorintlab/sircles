@@ -131,7 +131,7 @@ class CircleSetCoreRoleMember extends React.Component {
                 { role.roleMembers.map(roleMember => (
                   <Table.Row key={roleMember.member.uid}>
                     <Table.Cell>
-                      {roleMember.member.userName}
+                      {roleMember.member.fullName}
                     </Table.Cell>
                     {role.roleType !== 'leadlink' &&
                     <Table.Cell>
@@ -221,6 +221,7 @@ const CoreRoleMemberQuery = gql`
         member {
           uid
           userName
+          fullName
         }
         electionExpiration
       }

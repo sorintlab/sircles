@@ -182,7 +182,7 @@ class Circle extends React.Component {
                   <Avatar uid={d.member.uid} size={50} floated='right' inline spaced shape='rounded' />
                   <Card.Header>
                     <Link to={Util.memberUrl(d.member.uid, timeLine)}>
-                      {d.member.userName}
+                      {d.member.fullName}
                     </Link>
                   </Card.Header>
                 </Card.Content>
@@ -204,7 +204,7 @@ class Circle extends React.Component {
                   <Avatar uid={d.member.uid} size={50} floated='right' inline spaced shape='rounded' />
                   <Card.Header>
                     <Link to={Util.memberUrl(d.member.uid, timeLine)}>
-                      {d.member.userName}
+                      AAA {d.member.fullName}
                     </Link>
                   </Card.Header>
                 </Card.Content>
@@ -252,7 +252,7 @@ class Circle extends React.Component {
           filler =
             <Link to={memberLink}>
               <Avatar uid={member.uid} size={30} inline spaced shape='rounded' />
-              {member.userName}
+              {member.fullName}
             </Link>
           if (moment.utc(roleMember.electionExpiration).isValid()) {
             expireInfo = 'expires on ' + moment.utc(roleMember.electionExpiration).format('L')
@@ -326,7 +326,7 @@ class Circle extends React.Component {
               <List.Item key={member.uid}>
                 <Link to={memberLink}>
                   <Avatar uid={member.uid} size={30} inline spaced shape='rounded' />
-                  {member.userName}
+                  {member.fullName}
                 </Link>
                 {focusString}
               </List.Item>)
@@ -382,7 +382,7 @@ class Circle extends React.Component {
               <List.Item key={leadlinkMember.uid}>
                 <Link to={memberLink}>
                   <Avatar uid={leadlinkMember.uid} size={30} inline spaced shape='rounded' />
-                  {leadlinkMember.userName}
+                  {leadlinkMember.fullName}
                 </Link>
                 <span> (Lead Link)</span>
               </List.Item>)
@@ -463,7 +463,7 @@ class Circle extends React.Component {
                       <Table.Cell>
                         <Link to={Util.memberUrl(t.member.uid, timeLine)}>
                           <Avatar uid={t.member.uid} size={30} inline spaced shape='rounded' />
-                          {t.member.userName}
+                          {t.member.fullName}
                         </Link>
                       </Table.Cell>
                       <Table.Cell>
@@ -621,7 +621,7 @@ class Circle extends React.Component {
                     <Table.Cell>
                       <Link to={Util.memberUrl(e.issuer.uid, timeLine)}>
                         <Avatar uid={e.issuer.uid} size={30} inline spaced shape='rounded' />
-                        {e.issuer.userName}
+                        {e.issuer.fullName}
                       </Link>
                       {' did some changes'}
                     </Table.Cell>

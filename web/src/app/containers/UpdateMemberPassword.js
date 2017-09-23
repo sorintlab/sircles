@@ -176,6 +176,7 @@ const ViewerQuery = gql`
         uid
         isAdmin
         userName
+        fullName
       }
     }
   }
