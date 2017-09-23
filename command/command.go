@@ -34,7 +34,7 @@ const (
 	MaxRoleAdditionalContentLength = 1000 * 1000 // 1M of chars
 
 	MinMemberUserNameLength = 3
-	MaxMemberUserNameLength = 30
+	MaxMemberUserNameLength = 40
 	MinMemberFullNameLength = 3
 	MaxMemberFullNameLength = 100
 	MaxMemberEmailLength    = 100
