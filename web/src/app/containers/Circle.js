@@ -2,7 +2,7 @@ import React, { PropTypes } from 'react'
 import { graphql, compose } from 'react-apollo'
 import gql from 'graphql-tag'
 import { Link } from 'react-router-dom'
-import { Container, Header, Segment, Form, Button, Grid, Menu, Card, List, Table, Popup, Icon, Dropdown, Label, TextArea } from 'semantic-ui-react'
+import { Container, Header, Segment, Form, Button, Grid, Menu, Card, List, Table, Popup, Icon, Dropdown, Label, TextArea, Accordion } from 'semantic-ui-react'
 import moment from 'moment'
 import marked from 'marked'
 
@@ -332,12 +332,34 @@ class Circle extends React.Component {
               </List.Item>)
           }
           if (fillers.length === 0) {
-            /* TODO(sgotti) limit showed fillers when exceeding a choosed number and show a "more" button */
             fillers.push(<div key='none'>no members assigned to role</div>)
           }
-          if (r.roleMembers.length > 3) {
+          if (r.roleMembers.length >= 3) { // Other members accordion
+            let extras = []
             const moreFillersCount = r.roleMembers.length - 3
-            fillers.push(<div key='more'>... {moreFillersCount} other {moreFillersCount > 1 ? 'members' : 'member' }</div>)
+            let focus = r.roleMembers[i].focus
+            let focusString = ''
+            if (focus) {
+              focusString = ` (${focus})`
+            }
+            for (let i = 3, len = r.roleMembers.length; i < len; i++) {
+               let extramember = r.roleMembers[i].member
+               const extramemberLink = Util.memberUrl(extramember.uid, timeLine)
+               extras.push(
+               <List.Item key={extramember.uid}>
+                 <Link to={extramemberLink}>
+                   <Avatar uid={extramember.uid} size={30} inline spaced shape='rounded' />
+                   {extramember.fullName}
+                 </Link>
+                 {focusString}
+               </List.Item>)
+            }
+            fillers.push(<Accordion>
+              <Accordion.Title>... {moreFillersCount} other {moreFillersCount > 1 ? 'members' : 'member' }</Accordion.Title>
+              <Accordion.Content>
+                {extras}
+              </Accordion.Content>
+              </Accordion>)
           }
         }
 
