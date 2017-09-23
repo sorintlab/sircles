@@ -50,7 +50,7 @@ const (
 	MaxRoleAssignmentFocusLength = 30
 )
 
-var UserNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*([-]?[a-zA-Z0-9]+)+$`)
+var UserNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*([-||.||_]?[a-zA-Z0-9]+)+$`)
 
 var (
 	ErrValidation = errors.New("validation error")
