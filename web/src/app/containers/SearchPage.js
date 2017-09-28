@@ -70,7 +70,7 @@ class SearchPage extends React.Component {
               <Segment>
                 <Link to={memberLink}>
                   <Avatar uid={hit.id} size={30} inline spaced shape='rounded' />
-                  {hit.fields.UserName}
+                  {hit.fields.FullName}
                 </Link>
                 <Label className='labelright' color='green' horizontal basic size='tiny'>Member</Label>
               </Segment>

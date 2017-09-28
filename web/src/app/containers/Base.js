@@ -120,7 +120,7 @@ class Base extends React.Component {
 
     return (
       <div>
-        <Menu inverted>
+        <Menu inverted attached>
           <Menu.Item as={Link} to='/'>Sircles</Menu.Item>
           {viewer && (
             <Menu.Item as={Form} onSubmit={this.doSearch}>
@@ -132,7 +132,7 @@ class Base extends React.Component {
               <Dropdown className='item' trigger={
                 <span>
                   <Avatar uid={viewer.member.uid} size={30} inline spaced shape='rounded' />
-                  {viewer.member.userName}
+                  {viewer.member.fullName}
                 </span>
                 }>
                 <Dropdown.Menu>

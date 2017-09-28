@@ -100,6 +100,7 @@ const ViewerQuery = gql`
       member {
         uid
         userName
+        fullName
         circles {
           role {
             uid

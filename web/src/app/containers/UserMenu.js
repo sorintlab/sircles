@@ -161,6 +161,7 @@ const MemberQuery = gql`
       uid
       isAdmin
       userName
+      fullName
       circles {
         role {
           uid
