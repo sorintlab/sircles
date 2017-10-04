@@ -1,7 +1,7 @@
 language: go
 
 go:
-  - 1.8.3
+  - 1.9.x
 
 # make build of forked repos work on travis (the forked repo contents will be
 # copied inside the right path)
