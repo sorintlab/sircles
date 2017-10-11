@@ -87,28 +87,48 @@ var rootResponse = `
 			{
 				"accountabilities": [
 					{
-						"description": "Structuring the Governance of the Circle to enact its Purpose and Accountabilities",
-						"uid": "FWiC2SYxTVGUoiEZ4qdGEG"
+						"description": "Auditing the meetings and records of Sub-Circles as needed, and declaring a Process Breakdown upon discovering a pattern of behavior that conflicts with the rules of the Constitution",
+						"uid": "Se8a4DvgYq2cJ9UEDqgKNM"
+					},
+					{
+						"description": "Facilitating the Circle’s constitutionally-required meetings",
+						"uid": "gmZoeT8F28tM7kSDbmZmzW"
+					}
+				],
+				"circleMembers": [],
+				"depth": 1,
+				"domains": [],
+				"name": "Facilitator",
+				"purpose": "Circle governance and operational practices aligned with the Constitution",
+				"roleMembers": [],
+				"roleType": "facilitator",
+				"uid": "QEWLthRuui9iS2WJstNQL5"
+			},
+			{
+				"accountabilities": [
+					{
+						"description": "Allocating the Circle’s resources across its various Projects and/or Roles",
+						"uid": "2ohBfpApdb3apZknrsqGb8"
 					},
 					{
 						"description": "Assigning Partners to the Circle’s Roles; monitoring the fit; offering feedback to enhance fit; and re-assigning Roles to other Partners when useful for enhancing fit",
 						"uid": "KPaMkcYEKciFbucjfb3HC9"
 					},
 					{
-						"description": "Allocating the Circle’s resources across its various Projects and/or Roles",
-						"uid": "2ohBfpApdb3apZknrsqGb8"
+						"description": "Defining metrics for the circle",
+						"uid": "a62CFULXsJwqaxw6jbxRKM"
 					},
 					{
 						"description": "Establishing priorities and Strategies for the Circle",
 						"uid": "RpWWJJYDbG62C3VEs7Ebum"
 					},
 					{
-						"description": "Defining metrics for the circle",
-						"uid": "a62CFULXsJwqaxw6jbxRKM"
-					},
-					{
 						"description": "Removing constraints within the Circle to the Super-Circle enacting its Purpose and Accountabilities",
 						"uid": "gnuMbXaA2G9xwk9qZ34eum"
+					},
+					{
+						"description": "Structuring the Governance of the Circle to enact its Purpose and Accountabilities",
+						"uid": "FWiC2SYxTVGUoiEZ4qdGEG"
 					}
 				],
 				"circleMembers": [],
@@ -128,36 +148,16 @@ var rootResponse = `
 			{
 				"accountabilities": [
 					{
-						"description": "Facilitating the Circle’s constitutionally-required meetings",
-						"uid": "gmZoeT8F28tM7kSDbmZmzW"
-					},
-					{
-						"description": "Auditing the meetings and records of Sub-Circles as needed, and declaring a Process Breakdown upon discovering a pattern of behavior that conflicts with the rules of the Constitution",
-						"uid": "Se8a4DvgYq2cJ9UEDqgKNM"
-					}
-				],
-				"circleMembers": [],
-				"depth": 1,
-				"domains": [],
-				"name": "Facilitator",
-				"purpose": "Circle governance and operational practices aligned with the Constitution",
-				"roleMembers": [],
-				"roleType": "facilitator",
-				"uid": "QEWLthRuui9iS2WJstNQL5"
-			},
-			{
-				"accountabilities": [
-					{
-						"description": "Scheduling the Circle’s required meetings, and notifying all Core Circle Members of scheduled times and locations",
-						"uid": "yVgcf2FvMLvApmH4oth8ZG"
-					},
-					{
 						"description": "Capturing and publishing the outputs of the Circle’s required meetings, and maintaining a compiled view of the Circle’s current Governance, checklist items, and metrics",
 						"uid": "5qWPGXXtCZDJZbYCsHCBrn"
 					},
 					{
 						"description": "Interpreting Governance and the Constitution upon request",
 						"uid": "cp3LhNyZ9emRTZWWaqs9ej"
+					},
+					{
+						"description": "Scheduling the Circle’s required meetings, and notifying all Core Circle Members of scheduled times and locations",
+						"uid": "yVgcf2FvMLvApmH4oth8ZG"
 					}
 				],
 				"circleMembers": [],
@@ -1135,9 +1135,9 @@ func TestCircleCreateChildRole(t *testing.T) {
 						"uid": "RoaZnj2aFt5gSyt3Q9v5vm",
 						"depth": 1,
 						"roles": [
+							{"name":"Facilitator", "depth": 2},
 							{"name":"Lead Link", "depth": 2},
 							{"name":"Rep Link", "depth": 2},
-							{"name":"Facilitator", "depth": 2},
 							{"name":"Secretary", "depth": 2},
 							{"name":"rootRole-circle01", "depth": 2}
 						]
@@ -1170,17 +1170,17 @@ func TestCircleCreateChildRole(t *testing.T) {
 				"rootRole": {
 					"name": "General",
 					"roles": [
-						{ "name": "Lead Link", "roleType": "leadlink", "depth": 1 },
 						{ "name": "Facilitator", "roleType": "facilitator", "depth": 1 },
+						{ "name": "Lead Link", "roleType": "leadlink", "depth": 1 },
 						{ "name": "Secretary", "roleType": "secretary", "depth": 1 },
-						{ "name": "rootRole-role01", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role02", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role03", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role04", "roleType": "normal", "depth": 1 },
 						{ "name": "rootRole-circle02", "roleType": "circle", "depth": 1 },
 						{ "name": "rootRole-circle03", "roleType": "circle", "depth": 1 },
 						{ "name": "rootRole-circle04", "roleType": "circle", "depth": 1 },
-						{ "name": "rootRole-newcircle", "roleType": "circle", "depth": 1 }
+						{ "name": "rootRole-newcircle", "roleType": "circle", "depth": 1 },
+						{ "name": "rootRole-role01", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role02", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role03", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role04", "roleType": "normal", "depth": 1 }
 					]
 				}
 			}
@@ -1376,16 +1376,16 @@ func TestCircleDeleteChildRole(t *testing.T) {
 				"rootRole": {
 					"name": "General",
 					"roles": [
-						{ "name": "Lead Link" },
 						{ "name": "Facilitator" },
+						{ "name": "Lead Link" },
 						{ "name": "Secretary" },
+						{ "name": "rootRole-circle02" },
+						{ "name": "rootRole-circle03" },
+						{ "name": "rootRole-circle04" },
 						{ "name": "rootRole-role01" },
 						{ "name": "rootRole-role02" },
 						{ "name": "rootRole-role03" },
-						{ "name": "rootRole-role04" },
-						{ "name": "rootRole-circle02" },
-						{ "name": "rootRole-circle03" },
-						{ "name": "rootRole-circle04" }
+						{ "name": "rootRole-role04" }
 					]
 				}
 			}
@@ -1413,39 +1413,17 @@ func TestCircleDeleteChildRole(t *testing.T) {
 				"rootRole": {
 					"name": "General",
 					"roles": [
-						{
-							"name": "Lead Link"
-						},
-						{
-							"name": "Facilitator"
-						},
-						{
-							"name": "Secretary"
-						},
-						{
-							"name": "rootRole-role01"
-						},
-						{
-							"name": "rootRole-role02"
-						},
-						{
-							"name": "rootRole-role03"
-						},
-						{
-							"name": "rootRole-role04"
-						},
-						{
-							"name": "rootRole-circle01"
-						},
-						{
-							"name": "rootRole-circle02"
-						},
-						{
-							"name": "rootRole-circle03"
-						},
-						{
-							"name": "rootRole-circle04"
-						}
+						{ "name": "Facilitator" },
+						{ "name": "Lead Link" },
+						{ "name": "Secretary" },
+						{ "name": "rootRole-circle01" },
+						{ "name": "rootRole-circle02" },
+						{ "name": "rootRole-circle03" },
+						{ "name": "rootRole-circle04" },
+						{ "name": "rootRole-role01" },
+						{ "name": "rootRole-role02" },
+						{ "name": "rootRole-role03" },
+						{ "name": "rootRole-role04" }
 					]
 				}
 			}
@@ -1504,17 +1482,17 @@ func TestCircleDeleteChildRole(t *testing.T) {
 				"rootRole": {
 					"name": "General",
 					"roles": [
-						{ "name": "Lead Link", "roleType": "leadlink", "depth": 1 },
 						{ "name": "Facilitator", "roleType": "facilitator", "depth": 1 },
+						{ "name": "Lead Link", "roleType": "leadlink", "depth": 1 },
 						{ "name": "Secretary", "roleType": "secretary", "depth": 1 },
-						{ "name": "rootRole-role01", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role02", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role03", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role04", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-circle01-role01", "roleType": "normal", "depth": 1 },
 						{ "name": "rootRole-circle02", "roleType": "circle", "depth": 1 },
 						{ "name": "rootRole-circle03", "roleType": "circle", "depth": 1 },
 						{ "name": "rootRole-circle04", "roleType": "circle", "depth": 1 },
-						{ "name": "rootRole-circle01-role01", "roleType": "normal", "depth": 1 }
+						{ "name": "rootRole-role01", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role02", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role03", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role04", "roleType": "normal", "depth": 1 }
 					]
 				}
 			}
@@ -1542,17 +1520,17 @@ func TestCircleDeleteChildRole(t *testing.T) {
 				"rootRole": {
 					"name": "General",
 					"roles": [
-						{ "name": "Lead Link" },
 						{ "name": "Facilitator" },
+						{ "name": "Lead Link" },
 						{ "name": "Secretary" },
-						{ "name": "rootRole-role01" },
-						{ "name": "rootRole-role02" },
-						{ "name": "rootRole-role03" },
-						{ "name": "rootRole-role04" },
 						{ "name": "rootRole-circle01" },
 						{ "name": "rootRole-circle02" },
 						{ "name": "rootRole-circle03" },
-						{ "name": "rootRole-circle04" }
+						{ "name": "rootRole-circle04" },
+						{ "name": "rootRole-role01" },
+						{ "name": "rootRole-role02" },
+						{ "name": "rootRole-role03" },
+						{ "name": "rootRole-role04" }
 					]
 				}
 			}
@@ -1991,18 +1969,18 @@ func TestCircleUpdateChildRole(t *testing.T) {
 				"rootRole": {
 					"name": "General",
 					"roles": [
-						{ "name": "Lead Link", "roleType": "leadlink", "depth": 1 },
 						{ "name": "Facilitator", "roleType": "facilitator", "depth": 1 },
+						{ "name": "Lead Link", "roleType": "leadlink", "depth": 1 },
 						{ "name": "Secretary", "roleType": "secretary", "depth": 1 },
-						{ "name": "rootRole-role01", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role02", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role03", "roleType": "normal", "depth": 1 },
-						{ "name": "rootRole-role04", "roleType": "normal", "depth": 1 },
 						{ "name": "rootRole-circle01", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-circle01-role01", "roleType": "normal", "depth": 1 },
 						{ "name": "rootRole-circle02", "roleType": "circle", "depth": 1 },
 						{ "name": "rootRole-circle03", "roleType": "circle", "depth": 1 },
 						{ "name": "rootRole-circle04", "roleType": "circle", "depth": 1 },
-						{ "name": "rootRole-circle01-role01", "roleType": "normal", "depth": 1 }
+						{ "name": "rootRole-role01", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role02", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role03", "roleType": "normal", "depth": 1 },
+						{ "name": "rootRole-role04", "roleType": "normal", "depth": 1 }
 					]
 				}
 			}
@@ -2030,17 +2008,17 @@ func TestCircleUpdateChildRole(t *testing.T) {
 				"rootRole": {
 					"name": "General",
 					"roles": [
-						{ "name": "Lead Link" },
 						{ "name": "Facilitator" },
+						{ "name": "Lead Link" },
 						{ "name": "Secretary" },
-						{ "name": "rootRole-role01" },
-						{ "name": "rootRole-role02" },
-						{ "name": "rootRole-role03" },
-						{ "name": "rootRole-role04" },
 						{ "name": "rootRole-circle01" },
 						{ "name": "rootRole-circle02" },
 						{ "name": "rootRole-circle03" },
-						{ "name": "rootRole-circle04" }
+						{ "name": "rootRole-circle04" },
+						{ "name": "rootRole-role01" },
+						{ "name": "rootRole-role02" },
+						{ "name": "rootRole-role03" },
+						{ "name": "rootRole-role04" }
 					]
 				}
 			}

@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"context"
+	"sort"
 
 	"github.com/sorintlab/sircles/change"
 	"github.com/sorintlab/sircles/dataloader"
@@ -50,6 +51,7 @@ func (r *roleResolver) Domains() (*[]*domainResolver, error) {
 		return nil, err
 	}
 	domains := data.([]*models.Domain)
+	sort.Sort(models.Domains(domains))
 	l := make([]*domainResolver, len(domains))
 	for i, domain := range domains {
 		l[i] = &domainResolver{r.s, domain, r.timeLineID, r.dataLoaders}
@@ -63,6 +65,7 @@ func (r *roleResolver) Accountabilities() (*[]*accountabilityResolver, error) {
 		return nil, err
 	}
 	accountabilities := data.([]*models.Accountability)
+	sort.Sort(models.Accountabilities(accountabilities))
 	if err != nil {
 		return nil, err
 	}
@@ -116,6 +119,7 @@ func (r *roleResolver) Roles() (*[]*roleResolver, error) {
 		return nil, err
 	}
 	roles := data.([]*models.Role)
+	sort.Sort(models.Roles(roles))
 	l := make([]*roleResolver, len(roles))
 	for i, role := range roles {
 		l[i] = NewRoleResolver(r.s, role, r.timeLineID, r.dataLoaders)
@@ -323,6 +327,7 @@ func (r *circleMemberEdgeResolver) IsLeadLink() bool {
 }
 
 func (r *circleMemberEdgeResolver) FilledRoles() *[]*roleResolver {
+	sort.Sort(models.Roles(r.m.FilledRoles))
 	l := make([]*roleResolver, len(r.m.FilledRoles))
 	for i, role := range r.m.FilledRoles {
 		l[i] = NewRoleResolver(r.s, role, r.timeLineID, r.dataLoaders)
@@ -331,6 +336,7 @@ func (r *circleMemberEdgeResolver) FilledRoles() *[]*roleResolver {
 }
 
 func (r *circleMemberEdgeResolver) RepLink() *[]*roleResolver {
+	sort.Sort(models.Roles(r.m.RepLink))
 	l := make([]*roleResolver, len(r.m.RepLink))
 	for i, role := range r.m.RepLink {
 		l[i] = NewRoleResolver(r.s, role, r.timeLineID, r.dataLoaders)
@@ -363,6 +369,7 @@ func (r *memberCircleEdgeResolver) IsLeadLink() bool {
 }
 
 func (r *memberCircleEdgeResolver) FilledRoles() *[]*roleResolver {
+	sort.Sort(models.Roles(r.m.FilledRoles))
 	l := make([]*roleResolver, len(r.m.FilledRoles))
 	for i, role := range r.m.FilledRoles {
 		l[i] = NewRoleResolver(r.s, role, r.timeLineID, r.dataLoaders)
@@ -371,6 +378,7 @@ func (r *memberCircleEdgeResolver) FilledRoles() *[]*roleResolver {
 }
 
 func (r *memberCircleEdgeResolver) RepLink() *[]*roleResolver {
+	sort.Sort(models.Roles(r.m.RepLink))
 	l := make([]*roleResolver, len(r.m.RepLink))
 	for i, role := range r.m.RepLink {
 		l[i] = NewRoleResolver(r.s, role, r.timeLineID, r.dataLoaders)
