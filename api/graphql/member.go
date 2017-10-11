@@ -15,7 +15,7 @@ import (
 type viewerResolver struct {
 	s          readdb.ReadDB
 	m          *models.Member
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -50,7 +50,7 @@ func (r *viewerResolver) MemberCirclePermissions(ctx context.Context, args *stru
 type memberCirclePermissionsResolver struct {
 	s           readdb.ReadDB
 	permissions *models.MemberCirclePermissions
-	timeLineID  util.TimeLineSequenceNumber
+	timeLineID  util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -90,7 +90,7 @@ func (r *memberCirclePermissionsResolver) ManageRootCircle() bool {
 type memberResolver struct {
 	s          readdb.ReadDB
 	m          *models.Member
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -167,7 +167,7 @@ type memberConnectionResolver struct {
 	s           readdb.ReadDB
 	members     []*models.Member
 	hasMoreData bool
-	timeLineID  util.TimeLineSequenceNumber
+	timeLineID  util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -187,7 +187,7 @@ func (r *memberConnectionResolver) Edges() *[]*memberEdgeResolver {
 type memberEdgeResolver struct {
 	s          readdb.ReadDB
 	member     *models.Member
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -204,7 +204,7 @@ type createMemberResultResolver struct {
 	s          readdb.ReadDB
 	member     *models.Member
 	res        *change.CreateMemberResult
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -252,7 +252,7 @@ type updateMemberResultResolver struct {
 	s          readdb.ReadDB
 	member     *models.Member
 	res        *change.UpdateMemberResult
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }

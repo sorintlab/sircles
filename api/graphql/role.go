@@ -16,12 +16,12 @@ import (
 type roleResolver struct {
 	s          readdb.ReadDB
 	r          *models.Role
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
 
-func NewRoleResolver(s readdb.ReadDB, r *models.Role, timeLineID util.TimeLineSequenceNumber, dataLoaders *dataloader.DataLoaders) *roleResolver {
+func NewRoleResolver(s readdb.ReadDB, r *models.Role, timeLineID util.TimeLineNumber, dataLoaders *dataloader.DataLoaders) *roleResolver {
 	return &roleResolver{s: s, r: r, timeLineID: timeLineID, dataLoaders: dataLoaders}
 }
 
@@ -181,7 +181,7 @@ func (r *roleResolver) Events(ctx context.Context, args *struct {
 	First *float64
 	After *string
 }) (*roleEventConnectionResolver, error) {
-	var start, after util.TimeLineSequenceNumber
+	var start, after util.TimeLineNumber
 
 	// by default, if no cursor is defined use the query provided timeline
 	if args.After != nil {
@@ -207,7 +207,7 @@ func (r *roleResolver) Events(ctx context.Context, args *struct {
 type domainResolver struct {
 	s          readdb.ReadDB
 	d          *models.Domain
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -223,7 +223,7 @@ func (r *domainResolver) Description() string {
 type accountabilityResolver struct {
 	s          readdb.ReadDB
 	d          *models.Accountability
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -239,7 +239,7 @@ func (r *accountabilityResolver) Description() string {
 type roleAdditionalContentResolver struct {
 	s          readdb.ReadDB
 	c          *models.RoleAdditionalContent
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -251,7 +251,7 @@ func (r *roleAdditionalContentResolver) Content() string {
 type roleMemberEdgeResolver struct {
 	s          readdb.ReadDB
 	m          *models.RoleMemberEdge
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -278,7 +278,7 @@ func (r *roleMemberEdgeResolver) ElectionExpiration() *graphql.Time {
 type memberRoleEdgeResolver struct {
 	s          readdb.ReadDB
 	m          *models.MemberRoleEdge
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -305,7 +305,7 @@ func (r *memberRoleEdgeResolver) ElectionExpiration() *graphql.Time {
 type circleMemberEdgeResolver struct {
 	s          readdb.ReadDB
 	m          *models.CircleMemberEdge
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -347,7 +347,7 @@ func (r *circleMemberEdgeResolver) RepLink() *[]*roleResolver {
 type memberCircleEdgeResolver struct {
 	s          readdb.ReadDB
 	m          *models.MemberCircleEdge
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -390,7 +390,7 @@ type updateRootRoleResultResolver struct {
 	s          readdb.ReadDB
 	role       *models.Role
 	res        *change.UpdateRootRoleResult
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -462,7 +462,7 @@ type createRoleResultResolver struct {
 	s          readdb.ReadDB
 	role       *models.Role
 	res        *change.CreateRoleResult
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -522,7 +522,7 @@ type updateRoleResultResolver struct {
 	s          readdb.ReadDB
 	role       *models.Role
 	res        *change.UpdateRoleResult
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -593,7 +593,7 @@ func (r *updateRoleChangeErrorsResolver) Purpose() *string {
 type deleteRoleResultResolver struct {
 	s          readdb.ReadDB
 	res        *change.DeleteRoleResult
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -642,7 +642,7 @@ type setRoleAdditionalContentResultResolver struct {
 	s          readdb.ReadDB
 	c          *models.RoleAdditionalContent
 	res        *change.SetRoleAdditionalContentResult
-	timeLineID util.TimeLineSequenceNumber
+	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }

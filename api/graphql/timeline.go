@@ -36,7 +36,7 @@ type timeLineEdgeResolver struct {
 }
 
 func (r *timeLineEdgeResolver) Cursor() (string, error) {
-	return marshalTimeLineCursor(&TimeLineCursor{TimeLineID: r.timeLine.SequenceNumber})
+	return marshalTimeLineCursor(&TimeLineCursor{TimeLineID: r.timeLine.Number()})
 }
 
 func (r *timeLineEdgeResolver) TimeLine() *timeLineResolver {
@@ -50,9 +50,8 @@ type timeLineResolver struct {
 	dataLoaders *dataloader.DataLoaders
 }
 
-func (r *timeLineResolver) ID() util.TimeLineSequenceNumber {
-	return r.timeLine.SequenceNumber
-	//return strconv.FormatInt(int64(r.timeLine.SequenceNumber), 10)
+func (r *timeLineResolver) ID() util.TimeLineNumber {
+	return r.timeLine.Number()
 }
 
 func (r *timeLineResolver) Time() graphql.Time {

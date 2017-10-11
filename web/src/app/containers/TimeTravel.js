@@ -5,21 +5,26 @@ import { withRouter } from 'react-router-dom'
 import { Dimmer, Loader } from 'semantic-ui-react'
 
 import { withError } from '../modules/Error'
+import Util from '../modules/Util'
 
 class TimeTravel extends React.Component {
   componentWillReceiveProps (nextProps) {
-    const { timeLineFromTimeQuery } = nextProps
+    const { timeLineFromTimeQuery, curTimeLineQuery } = nextProps
 
-    if (timeLineFromTimeQuery.error) {
+    if (Util.isQueriesError(timeLineFromTimeQuery, curTimeLineQuery)) {
       this.props.appError.setError(true)
       return
     }
 
-    if (timeLineFromTimeQuery.loading) {
+    if (Util.isQueriesLoading(timeLineFromTimeQuery, curTimeLineQuery)) {
       return
     }
 
-    const timeLineID = timeLineFromTimeQuery.timeLines.edges[0].timeLine.id
+    let timeLineID = curTimeLineQuery.timeLine.id
+    if (timeLineFromTimeQuery.timeLines.edges[0]) {
+      timeLineID = timeLineFromTimeQuery.timeLines.edges[0].timeLine.id
+    }
+
     this.props.history.push(`/timeline/${timeLineID}`)
   }
 
@@ -32,11 +37,11 @@ class TimeTravel extends React.Component {
       return null
     }
 
-    if (timeLineFromTimeQuery.error) {
+    if (Util.isQueriesError(timeLineFromTimeQuery, curTimeLineQuery)) {
       return null
     }
 
-    if (timeLineFromTimeQuery.loading) {
+    if (Util.isQueriesLoading(timeLineFromTimeQuery, curTimeLineQuery)) {
       return (
         <Dimmer active inverted>
           <Loader inverted>Loading</Loader>
@@ -60,7 +65,22 @@ const timeLineFromTimeQuery = gql`
   }
 `
 
+const curTimeLineQuery = gql`
+  query curTimeLine {
+    timeLine {
+      id
+      time
+    }
+  }
+`
+
 export default withRouter(compose(
+graphql(curTimeLineQuery, {
+  name: 'curTimeLineQuery',
+  options: props => ({
+    fetchPolicy: 'network-only'
+  })
+}),
 graphql(timeLineFromTimeQuery, {
   name: 'timeLineFromTimeQuery',
   options: props => ({

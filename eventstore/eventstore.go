@@ -3,8 +3,8 @@ package eventstore
 import (
 	"database/sql"
 	"encoding/json"
-	"time"
 
+	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
 	slog "github.com/sorintlab/sircles/log"
 	"github.com/sorintlab/sircles/util"
@@ -19,20 +19,26 @@ var (
 	// Use postgresql $ placeholder. It'll be converted to ? from the provided db functions
 	sb = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
-	eventSelect            = sb.Select("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "data").From("event")
-	eventInsert            = sb.Insert("event").Columns("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "data")
+	eventSelect            = sb.Select("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "groupid", "data").From("event")
+	eventInsert            = sb.Insert("event").Columns("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "groupid", "data")
 	aggregateVersionSelect = sb.Select("aggregatetype", "aggregateid", "version").From("aggregateversion")
 	aggregateVersionInsert = sb.Insert("aggregateversion").Columns("aggregatetype", "aggregateid", "version")
 )
 
 type EventStore struct {
 	tx *db.Tx
+	tg common.TimeGenerator
 }
 
 func NewEventStore(tx *db.Tx) *EventStore {
 	return &EventStore{
 		tx: tx,
+		tg: common.DefaultTimeGenerator{},
 	}
+}
+
+func (s *EventStore) SetTimeGenerator(tg common.TimeGenerator) {
+	s.tg = tg
 }
 
 func scanEvent(rows *sql.Rows) (*Event, error) {
@@ -40,7 +46,7 @@ func scanEvent(rows *sql.Rows) (*Event, error) {
 	var rawData []byte
 	// To make sqlite3 happy
 	var eventType, aggregateType string
-	fields := []interface{}{&e.ID, &e.SequenceNumber, &eventType, &aggregateType, &e.AggregateID, &e.Timestamp, &e.Version, &e.CorrelationID, &e.CausationID, &rawData}
+	fields := []interface{}{&e.ID, &e.SequenceNumber, &eventType, &aggregateType, &e.AggregateID, &e.Timestamp, &e.Version, &e.CorrelationID, &e.CausationID, &e.GroupID, &rawData}
 	if err := rows.Scan(fields...); err != nil {
 		return nil, errors.Wrap(err, "error scanning event")
 	}
@@ -103,7 +109,7 @@ func (s *EventStore) insertEvent(tx *db.Tx, event *Event) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal event")
 	}
-	q, args, err := eventInsert.Values(event.ID, event.SequenceNumber, event.EventType, event.AggregateType, event.AggregateID, event.Timestamp, event.Version, event.CorrelationID, event.CausationID, data).ToSql()
+	q, args, err := eventInsert.Values(event.ID, event.SequenceNumber, event.EventType, event.AggregateType, event.AggregateID, event.Timestamp, event.Version, event.CorrelationID, event.CausationID, event.GroupID, data).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
 	}
@@ -222,7 +228,7 @@ func (s *EventStore) WriteEvents(events Events) (int64, error) {
 		versions[e.AggregateID].Version++
 
 		e.SequenceNumber = curSequenceNumber
-		e.Timestamp = time.Now()
+		e.Timestamp = s.tg.Now()
 		e.Version = versions[e.AggregateID].Version
 
 		if err := s.insertEvent(s.tx, e); err != nil {

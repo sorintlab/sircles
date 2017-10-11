@@ -10,6 +10,7 @@ import (
 
 	"github.com/sorintlab/sircles/change"
 	"github.com/sorintlab/sircles/command/commands"
+	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
 	"github.com/sorintlab/sircles/eventstore"
 	slog "github.com/sorintlab/sircles/log"
@@ -80,6 +81,7 @@ type UIDGenerator interface {
 
 type CommandService struct {
 	uidGenerator UIDGenerator
+	tg           common.TimeGenerator
 	tx           *db.Tx
 	readDB       *readdb.DBService
 	es           *eventstore.EventStore
@@ -87,15 +89,21 @@ type CommandService struct {
 	hasMemberProvider bool
 }
 
-func NewCommandService(tx *db.Tx, readDB *readdb.DBService, uidGenerator UIDGenerator, hasMemberProvider bool) *CommandService {
+func NewCommandService(tx *db.Tx, readDB *readdb.DBService, uidGenerator UIDGenerator, tg common.TimeGenerator, hasMemberProvider bool) *CommandService {
 	if uidGenerator == nil {
 		uidGenerator = sf
 	}
 
+	if tg == nil {
+		tg = common.DefaultTimeGenerator{}
+	}
+
 	es := eventstore.NewEventStore(tx)
+	es.SetTimeGenerator(tg)
 
 	s := &CommandService{
 		uidGenerator:      uidGenerator,
+		tg:                tg,
 		tx:                tx,
 		readDB:            readDB,
 		es:                es,
@@ -119,8 +127,7 @@ func (s *CommandService) nextTimeLine() (*util.TimeLine, error) {
 		return nil, errors.Errorf("current timestamp %s is before last timeline timestamp %s. Wrong server clock?", now.UTC(), curTl.Timestamp.UTC())
 	}
 	return &util.TimeLine{
-			SequenceNumber: curTl.SequenceNumber + 1,
-			Timestamp:      now,
+			Timestamp: now,
 		},
 		nil
 }
@@ -133,7 +140,7 @@ func (s *CommandService) writeEvents(events eventstore.Events) error {
 // VERY BIG TODO(sgotti)!!!
 // Move the validation outside command handling
 
-func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRootRoleChange) (*change.UpdateRootRoleResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRootRoleChange) (*change.UpdateRootRoleResult, util.ID, error) {
 	res := &change.UpdateRootRoleResult{}
 	res.UpdateRootRoleChangeErrors.CreateDomainChangesErrors = make([]change.CreateDomainChangeErrors, len(c.CreateDomainChanges))
 	res.UpdateRootRoleChangeErrors.UpdateDomainChangesErrors = make([]change.UpdateDomainChangeErrors, len(c.UpdateDomainChanges))
@@ -207,47 +214,47 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	var role *models.Role
 	var err error
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err = s.readDB.RoleInternal(curTlSeq, c.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	rootRole, err := s.readDB.RootRoleInternal(curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role.ID != rootRole.ID {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s isn't the root role", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, role.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.ManageRootCircle {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	// TODO(sgotti) split validation from event creation, this will lead to some
@@ -255,23 +262,16 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeUpdateRootRole, nextTl, callingMember.ID, &commands.UpdateRootRole{UpdateRootRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeUpdateRootRole, callingMember.ID, &commands.UpdateRootRole{UpdateRootRoleChange: *c})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	if c.NameChanged {
 		if role.RoleType.IsCoreRoleType() {
-			return nil, 0, errors.Errorf("cannot change core role name")
+			return nil, util.NilID, errors.Errorf("cannot change core role name")
 		}
 		role.Name = c.Name
 	}
@@ -280,17 +280,17 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 		role.Purpose = c.Purpose
 	}
 
-	events = events.AddEvent(eventstore.NewEventRoleUpdated(&correlationID, &commandCausationID, nextTl, role))
+	events = events.AddEvent(eventstore.NewEventRoleUpdated(&correlationID, &causationID, &groupID, role))
 
 	domainsGroups, err := s.readDB.RoleDomainsInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	domains := domainsGroups[role.ID]
 
 	accountabilitiesGroups, err := s.readDB.RoleAccountabilitiesInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	accountabilities := accountabilitiesGroups[role.ID]
 
@@ -299,7 +299,7 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 		domain.Description = createDomainChange.Description
 		domain.ID = s.uidGenerator.UUID(domain.Description)
 
-		events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &commandCausationID, nextTl, role.ID, &domain))
+		events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &causationID, &groupID, role.ID, &domain))
 	}
 
 	for _, deleteDomainChange := range c.DeleteDomainChanges {
@@ -311,9 +311,9 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 			}
 		}
 		if !found {
-			return nil, 0, errors.Errorf("cannot delete unexistent domain %s", deleteDomainChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot delete unexistent domain %s", deleteDomainChange.ID)
 		}
-		events = events.AddEvent(eventstore.NewEventRoleDomainDeleted(&correlationID, &commandCausationID, nextTl, role.ID, deleteDomainChange.ID))
+		events = events.AddEvent(eventstore.NewEventRoleDomainDeleted(&correlationID, &causationID, &groupID, role.ID, deleteDomainChange.ID))
 	}
 
 	for _, updateDomainChange := range c.UpdateDomainChanges {
@@ -325,12 +325,12 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 			}
 		}
 		if domain == nil {
-			return nil, 0, errors.Errorf("cannot update unexistent domain %s", updateDomainChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot update unexistent domain %s", updateDomainChange.ID)
 		}
 		if updateDomainChange.DescriptionChanged {
 			domain.Description = updateDomainChange.Description
 		}
-		events = events.AddEvent(eventstore.NewEventRoleDomainUpdated(&correlationID, &commandCausationID, nextTl, role.ID, domain))
+		events = events.AddEvent(eventstore.NewEventRoleDomainUpdated(&correlationID, &causationID, &groupID, role.ID, domain))
 	}
 
 	for _, createAccountabilityChange := range c.CreateAccountabilityChanges {
@@ -338,7 +338,7 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 		accountability.Description = createAccountabilityChange.Description
 		accountability.ID = s.uidGenerator.UUID(accountability.Description)
 
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &commandCausationID, nextTl, role.ID, &accountability))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &causationID, &groupID, role.ID, &accountability))
 	}
 
 	for _, deleteAccountabilityChange := range c.DeleteAccountabilityChanges {
@@ -350,9 +350,9 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 			}
 		}
 		if !found {
-			return nil, 0, errors.Errorf("cannot delete unexistent accountability %s", deleteAccountabilityChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot delete unexistent accountability %s", deleteAccountabilityChange.ID)
 		}
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityDeleted(&correlationID, &commandCausationID, nextTl, role.ID, deleteAccountabilityChange.ID))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityDeleted(&correlationID, &causationID, &groupID, role.ID, deleteAccountabilityChange.ID))
 	}
 
 	for _, updateAccountabilityChange := range c.UpdateAccountabilityChanges {
@@ -364,27 +364,27 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 			}
 		}
 		if accountability == nil {
-			return nil, 0, errors.Errorf("cannot update unexistent accountability %s", updateAccountabilityChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot update unexistent accountability %s", updateAccountabilityChange.ID)
 		}
 		if updateAccountabilityChange.DescriptionChanged {
 			accountability.Description = updateAccountabilityChange.Description
 		}
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityUpdated(&correlationID, &commandCausationID, nextTl, role.ID, accountability))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityUpdated(&correlationID, &causationID, &groupID, role.ID, accountability))
 	}
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.ID, c *change.CreateRoleChange) (*change.CreateRoleResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.ID, c *change.CreateRoleChange) (*change.CreateRoleResult, util.ID, error) {
 	res := &change.CreateRoleResult{}
 	res.CreateRoleChangeErrors.CreateDomainChangesErrors = make([]change.CreateDomainChangeErrors, len(c.CreateDomainChanges))
 	res.CreateRoleChangeErrors.CreateAccountabilityChangesErrors = make([]change.CreateAccountabilityChangeErrors, len(c.CreateAccountabilityChanges))
@@ -433,45 +433,45 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	// check that parent role exists
 	prole, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if prole == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("parent role with id %s doesn't exist", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 	if prole.RoleType != models.RoleTypeCircle {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("parent role is not a circle")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, prole.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.ManageChildRoles {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	pChildsGroups, err := s.readDB.ChildRolesInternal(curTlSeq, []util.ID{prole.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	pChilds := pChildsGroups[prole.ID]
 
@@ -481,32 +481,25 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 		for _, pChild := range pChilds {
 			if pChild.ID == rfp {
 				if pChild.RoleType.IsCoreRoleType() {
-					return nil, 0, errors.Errorf("role %s to move from parent is a core role type (not a normal role or a circle)", rfp)
+					return nil, util.NilID, errors.Errorf("role %s to move from parent is a core role type (not a normal role or a circle)", rfp)
 				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			return nil, 0, errors.Errorf("role %s to move from parent is not a child of parent role %s", rfp, prole.ID)
+			return nil, util.NilID, errors.Errorf("role %s to move from parent is not a child of parent role %s", rfp, prole.ID)
 		}
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleCreateChildRole, nextTl, callingMember.ID, &commands.CircleCreateChildRole{RoleID: roleID, CreateRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleCreateChildRole, callingMember.ID, &commands.CircleCreateChildRole{RoleID: roleID, CreateRoleChange: *c})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	role := &models.Role{
 		Name:     c.Name,
@@ -516,7 +509,7 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 
 	role.ID = s.uidGenerator.UUID(role.Name)
 
-	events = events.AddEvent(eventstore.NewEventRoleCreated(&correlationID, &commandCausationID, nextTl, role, &roleID))
+	events = events.AddEvent(eventstore.NewEventRoleCreated(&correlationID, &causationID, &groupID, role, &roleID))
 
 	for _, createDomainChange := range c.CreateDomainChanges {
 		domain := models.Domain{}
@@ -524,7 +517,7 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 
 		domain.ID = s.uidGenerator.UUID(domain.Description)
 
-		events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &commandCausationID, nextTl, role.ID, &domain))
+		events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &causationID, &groupID, role.ID, &domain))
 	}
 
 	for _, createAccountabilityChange := range c.CreateAccountabilityChanges {
@@ -533,14 +526,14 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 
 		accountability.ID = s.uidGenerator.UUID(accountability.Description)
 
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &commandCausationID, nextTl, role.ID, &accountability))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &causationID, &groupID, role.ID, &accountability))
 	}
 
 	// Add core roles to circle
 	if c.RoleType == models.RoleTypeCircle {
-		es, err := s.roleAddCoreRoles(correlationID, commandCausationID, nextTl, role, false)
+		es, err := s.roleAddCoreRoles(correlationID, causationID, groupID, role, false)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		events = events.AddEvents(es)
 	}
@@ -553,24 +546,24 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if fromParent {
-			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &commandCausationID, nextTl, pChild.ID, &role.ID))
+			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &causationID, &groupID, pChild.ID, &role.ID))
 		}
 	}
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	res.RoleID = &role.ID
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.ID, c *change.UpdateRoleChange) (*change.UpdateRoleResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.ID, c *change.UpdateRoleChange) (*change.UpdateRoleResult, util.ID, error) {
 	res := &change.UpdateRoleResult{}
 	res.UpdateRoleChangeErrors.CreateDomainChangesErrors = make([]change.CreateDomainChangeErrors, len(c.CreateDomainChanges))
 	res.UpdateRoleChangeErrors.UpdateDomainChangesErrors = make([]change.UpdateDomainChangeErrors, len(c.UpdateDomainChanges))
@@ -644,56 +637,56 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	var role *models.Role
 	var err error
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err = s.readDB.RoleInternal(curTlSeq, c.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	var prole *models.Role
 	proleGroups, err := s.readDB.RoleParentInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	prole = proleGroups[role.ID]
 
 	if prole == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s is the root role", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	if roleID != prole.ID {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't have parent circle with id %s", c.ID, roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.ManageChildRoles {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	// TODO(sgotti) split validation from event creation, this will lead to some
@@ -701,29 +694,22 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleUpdateChildRole, nextTl, callingMember.ID, &commands.CircleUpdateChildRole{RoleID: roleID, UpdateRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleUpdateChildRole, callingMember.ID, &commands.CircleUpdateChildRole{RoleID: roleID, UpdateRoleChange: *c})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	childsGroups, err := s.readDB.ChildRolesInternal(curTlSeq, []util.ID{role.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	childs := childsGroups[role.ID]
 
 	pChildsGroups, err := s.readDB.ChildRolesInternal(curTlSeq, []util.ID{prole.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	pChilds := pChildsGroups[prole.ID]
 
@@ -733,14 +719,14 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 		for _, child := range childs {
 			if child.ID == rtp {
 				if child.RoleType.IsCoreRoleType() {
-					return nil, 0, errors.Errorf("role %s to move to parent is a core role type (not a normal role or a circle)", rtp)
+					return nil, util.NilID, errors.Errorf("role %s to move to parent is a core role type (not a normal role or a circle)", rtp)
 				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			return nil, 0, errors.Errorf("role %s to move to parent is not a child of role %s", rtp, role.ID)
+			return nil, util.NilID, errors.Errorf("role %s to move to parent is not a child of role %s", rtp, role.ID)
 		}
 	}
 
@@ -750,20 +736,20 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 		for _, pChild := range pChilds {
 			if pChild.ID == rfp {
 				if pChild.RoleType.IsCoreRoleType() {
-					return nil, 0, errors.Errorf("role %s to move from parent is a core role type (not a normal role or a circle)", rfp)
+					return nil, util.NilID, errors.Errorf("role %s to move from parent is a core role type (not a normal role or a circle)", rfp)
 				}
 				found = true
 				break
 			}
 		}
 		if !found {
-			return nil, 0, errors.Errorf("role %s to move from parent is not a child of parent role %s", rfp, prole.ID)
+			return nil, util.NilID, errors.Errorf("role %s to move from parent is not a child of parent role %s", rfp, prole.ID)
 		}
 	}
 
 	if c.NameChanged {
 		if role.RoleType.IsCoreRoleType() {
-			return nil, 0, errors.Errorf("cannot change core role name")
+			return nil, util.NilID, errors.Errorf("cannot change core role name")
 		}
 		role.Name = c.Name
 	}
@@ -774,52 +760,52 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 
 	if c.MakeCircle {
 		if role.RoleType != models.RoleTypeNormal {
-			return nil, 0, errors.Errorf("role with id %s of type %s cannot be transformed in a circle", role.ID, role.RoleType)
+			return nil, util.NilID, errors.Errorf("role with id %s of type %s cannot be transformed in a circle", role.ID, role.RoleType)
 		}
 		role.RoleType = models.RoleTypeCircle
 
 		// remove members filling the role ince it will become a circle
 		roleMemberEdgesGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{role.ID}, nil)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		roleMemberEdges := roleMemberEdgesGroups[role.ID]
 
 		for _, roleMemberEdge := range roleMemberEdges {
-			events = events.AddEvent(eventstore.NewEventRoleMemberRemoved(&correlationID, &commandCausationID, nextTl, role.ID, roleMemberEdge.Member.ID))
+			events = events.AddEvent(eventstore.NewEventRoleMemberRemoved(&correlationID, &causationID, &groupID, role.ID, roleMemberEdge.Member.ID))
 		}
 	}
 
 	if c.MakeRole {
 		if role.RoleType != models.RoleTypeCircle {
-			return nil, 0, errors.Errorf("role with id %s isn't a circle", role.ID)
+			return nil, util.NilID, errors.Errorf("role with id %s isn't a circle", role.ID)
 		}
 
 		role.RoleType = models.RoleTypeNormal
 
 		circleDirectMembersGroups, err := s.readDB.CircleDirectMembersInternal(curTlSeq, []util.ID{role.ID})
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		circleDirectMembers := circleDirectMembersGroups[role.ID]
 
 		// Remove circle direct members since they don't exist on a role
 		for _, circleDirectMember := range circleDirectMembers {
-			events = events.AddEvent(eventstore.NewEventCircleDirectMemberRemoved(&correlationID, &commandCausationID, nextTl, role.ID, circleDirectMember.ID))
+			events = events.AddEvent(eventstore.NewEventCircleDirectMemberRemoved(&correlationID, &causationID, &groupID, role.ID, circleDirectMember.ID))
 		}
 
 		// Remove circle leadLink member
-		es, err := s.circleUnsetLeadLinkMember(correlationID, commandCausationID, nextTl, role.ID)
+		es, err := s.circleUnsetLeadLinkMember(correlationID, causationID, groupID, curTl, role.ID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		events = events.AddEvents(es)
 
 		// Remove circle core roles members
 		for _, rt := range []models.RoleType{models.RoleTypeRepLink, models.RoleTypeFacilitator, models.RoleTypeSecretary} {
-			es, err := s.circleUnsetCoreRoleMember(correlationID, commandCausationID, nextTl, rt, role.ID)
+			es, err := s.circleUnsetCoreRoleMember(correlationID, causationID, groupID, curTl, rt, role.ID)
 			if err != nil {
-				return nil, 0, err
+				return nil, util.NilID, err
 			}
 			events = events.AddEvents(es)
 		}
@@ -833,26 +819,26 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if toParent {
-			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &commandCausationID, nextTl, child.ID, &prole.ID))
+			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &causationID, &groupID, child.ID, &prole.ID))
 		} else {
 			if c.MakeRole {
 				// recursive delete for sub roles
-				es, err := s.deleteRole(correlationID, commandCausationID, curTl, nextTl, child.ID, nil)
+				es, err := s.deleteRole(correlationID, causationID, groupID, curTl, child.ID, nil)
 				if err != nil {
-					return nil, 0, err
+					return nil, util.NilID, err
 				}
 				events = events.AddEvents(es)
 			}
 		}
 	}
 
-	events = events.AddEvent(eventstore.NewEventRoleUpdated(&correlationID, &commandCausationID, nextTl, role))
+	events = events.AddEvent(eventstore.NewEventRoleUpdated(&correlationID, &causationID, &groupID, role))
 
 	if c.MakeCircle {
 		// Add core roles to circle
-		es, err := s.roleAddCoreRoles(correlationID, commandCausationID, nextTl, role, false)
+		es, err := s.roleAddCoreRoles(correlationID, causationID, groupID, role, false)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		events = events.AddEvents(es)
 	}
@@ -865,19 +851,19 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if fromParent {
-			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &commandCausationID, nextTl, pChild.ID, &role.ID))
+			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &causationID, &groupID, pChild.ID, &role.ID))
 		}
 	}
 
 	domainsGroups, err := s.readDB.RoleDomainsInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	domains := domainsGroups[role.ID]
 
 	accountabilitiesGroups, err := s.readDB.RoleAccountabilitiesInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	accountabilities := accountabilitiesGroups[role.ID]
 
@@ -886,7 +872,7 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 		domain.Description = createDomainChange.Description
 		domain.ID = s.uidGenerator.UUID(domain.Description)
 
-		events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &commandCausationID, nextTl, role.ID, &domain))
+		events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &causationID, &groupID, role.ID, &domain))
 	}
 
 	for _, deleteDomainChange := range c.DeleteDomainChanges {
@@ -898,9 +884,9 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if !found {
-			return nil, 0, errors.Errorf("cannot delete unexistent domain %s", deleteDomainChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot delete unexistent domain %s", deleteDomainChange.ID)
 		}
-		events = events.AddEvent(eventstore.NewEventRoleDomainDeleted(&correlationID, &commandCausationID, nextTl, role.ID, deleteDomainChange.ID))
+		events = events.AddEvent(eventstore.NewEventRoleDomainDeleted(&correlationID, &causationID, &groupID, role.ID, deleteDomainChange.ID))
 	}
 
 	for _, updateDomainChange := range c.UpdateDomainChanges {
@@ -912,12 +898,12 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if domain == nil {
-			return nil, 0, errors.Errorf("cannot update unexistent domain %s", updateDomainChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot update unexistent domain %s", updateDomainChange.ID)
 		}
 		if updateDomainChange.DescriptionChanged {
 			domain.Description = updateDomainChange.Description
 		}
-		events = events.AddEvent(eventstore.NewEventRoleDomainUpdated(&correlationID, &commandCausationID, nextTl, role.ID, domain))
+		events = events.AddEvent(eventstore.NewEventRoleDomainUpdated(&correlationID, &causationID, &groupID, role.ID, domain))
 	}
 
 	for _, createAccountabilityChange := range c.CreateAccountabilityChanges {
@@ -925,7 +911,7 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 		accountability.Description = createAccountabilityChange.Description
 		accountability.ID = s.uidGenerator.UUID(accountability.Description)
 
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &commandCausationID, nextTl, role.ID, &accountability))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &causationID, &groupID, role.ID, &accountability))
 	}
 
 	for _, deleteAccountabilityChange := range c.DeleteAccountabilityChanges {
@@ -937,9 +923,9 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if !found {
-			return nil, 0, errors.Errorf("cannot delete unexistent accountability %s", deleteAccountabilityChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot delete unexistent accountability %s", deleteAccountabilityChange.ID)
 		}
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityDeleted(&correlationID, &commandCausationID, nextTl, role.ID, deleteAccountabilityChange.ID))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityDeleted(&correlationID, &causationID, &groupID, role.ID, deleteAccountabilityChange.ID))
 	}
 
 	for _, updateAccountabilityChange := range c.UpdateAccountabilityChanges {
@@ -951,30 +937,30 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if accountability == nil {
-			return nil, 0, errors.Errorf("cannot update unexistent accountability %s", updateAccountabilityChange.ID)
+			return nil, util.NilID, errors.Errorf("cannot update unexistent accountability %s", updateAccountabilityChange.ID)
 		}
 		if updateAccountabilityChange.DescriptionChanged {
 			accountability.Description = updateAccountabilityChange.Description
 		}
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityUpdated(&correlationID, &commandCausationID, nextTl, role.ID, accountability))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityUpdated(&correlationID, &causationID, &groupID, role.ID, accountability))
 	}
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) deleteRole(correlationID, causationID util.ID, curTl, nextTl *util.TimeLine, roleID util.ID, skipchilds []util.ID) (eventstore.Events, error) {
+func (s *CommandService) deleteRole(correlationID, causationID, groupID util.ID, curTl *util.TimeLine, roleID util.ID, skipchilds []util.ID) (eventstore.Events, error) {
 	events := eventstore.NewEvents()
 
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
@@ -1019,7 +1005,7 @@ func (s *CommandService) deleteRole(correlationID, causationID util.ID, curTl, n
 		}
 		roleMemberEdges := roleMemberEdgesGroups[roleID]
 		for _, roleMemberEdge := range roleMemberEdges {
-			events = events.AddEvent(eventstore.NewEventRoleMemberRemoved(&correlationID, &causationID, nextTl, roleID, roleMemberEdge.Member.ID))
+			events = events.AddEvent(eventstore.NewEventRoleMemberRemoved(&correlationID, &causationID, &groupID, roleID, roleMemberEdge.Member.ID))
 		}
 	}
 
@@ -1031,11 +1017,11 @@ func (s *CommandService) deleteRole(correlationID, causationID util.ID, curTl, n
 		}
 		circleDirectMembers := circleDirectMembersGroups[roleID]
 		for _, circleDirectMember := range circleDirectMembers {
-			events = events.AddEvent(eventstore.NewEventCircleDirectMemberRemoved(&correlationID, &causationID, nextTl, roleID, circleDirectMember.ID))
+			events = events.AddEvent(eventstore.NewEventCircleDirectMemberRemoved(&correlationID, &causationID, &groupID, roleID, circleDirectMember.ID))
 		}
 
 		// Remove circle leadLink member
-		es, err := s.circleUnsetLeadLinkMember(correlationID, causationID, nextTl, roleID)
+		es, err := s.circleUnsetLeadLinkMember(correlationID, causationID, groupID, curTl, roleID)
 		if err != nil {
 			return nil, err
 		}
@@ -1043,7 +1029,7 @@ func (s *CommandService) deleteRole(correlationID, causationID util.ID, curTl, n
 
 		// Remove circle core roles members
 		for _, rt := range []models.RoleType{models.RoleTypeRepLink, models.RoleTypeFacilitator, models.RoleTypeSecretary} {
-			es, err := s.circleUnsetCoreRoleMember(correlationID, causationID, nextTl, rt, roleID)
+			es, err := s.circleUnsetCoreRoleMember(correlationID, causationID, groupID, curTl, rt, roleID)
 			if err != nil {
 				return nil, err
 			}
@@ -1062,7 +1048,7 @@ func (s *CommandService) deleteRole(correlationID, causationID util.ID, curTl, n
 			if skip {
 				continue
 			}
-			es, err := s.deleteRole(correlationID, causationID, curTl, nextTl, child.ID, nil)
+			es, err := s.deleteRole(correlationID, causationID, groupID, curTl, child.ID, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -1072,16 +1058,16 @@ func (s *CommandService) deleteRole(correlationID, causationID util.ID, curTl, n
 
 	// Remove domains from role
 	for _, domain := range domains {
-		events = events.AddEvent(eventstore.NewEventRoleDomainDeleted(&correlationID, &causationID, nextTl, roleID, domain.ID))
+		events = events.AddEvent(eventstore.NewEventRoleDomainDeleted(&correlationID, &causationID, &groupID, roleID, domain.ID))
 	}
 
 	// Remove accountabilities from role
 	for _, accountability := range accountabilities {
-		events = events.AddEvent(eventstore.NewEventRoleAccountabilityDeleted(&correlationID, &causationID, nextTl, roleID, accountability.ID))
+		events = events.AddEvent(eventstore.NewEventRoleAccountabilityDeleted(&correlationID, &causationID, &groupID, roleID, accountability.ID))
 	}
 
 	// First register roleDeleteEvent since its ID will be the causation ID of subsequent events
-	roleDeletedEvent := eventstore.NewEventRoleDeleted(&correlationID, &causationID, nextTl, roleID)
+	roleDeletedEvent := eventstore.NewEventRoleDeleted(&correlationID, &causationID, &groupID, roleID)
 	events = append(events, roleDeletedEvent)
 
 	// TODO(sgotti) in future move this to a reaction from the tensions aggregate event listener (when/if implemented) on the roleDelete event
@@ -1091,55 +1077,55 @@ func (s *CommandService) deleteRole(correlationID, causationID util.ID, curTl, n
 	}
 	roleTensions := roleTensionsGroups[roleID]
 	for _, roleTension := range roleTensions {
-		events = events.AddEvent(eventstore.NewEventTensionRoleChanged(&correlationID, &roleDeletedEvent.ID, nextTl, roleTension.ID, &roleID, nil))
+		events = events.AddEvent(eventstore.NewEventTensionRoleChanged(&correlationID, &roleDeletedEvent.ID, &groupID, roleTension.ID, &roleID, nil))
 	}
 
 	return events, nil
 }
 
-func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.ID, c *change.DeleteRoleChange) (*change.DeleteRoleResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.ID, c *change.DeleteRoleChange) (*change.DeleteRoleResult, util.ID, error) {
 	res := &change.DeleteRoleResult{}
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, c.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	if role.RoleType != models.RoleTypeCircle {
 		if len(c.RolesToParent) > 0 {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("role with id %s is not a circle", role.ID)
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
 	proleGroups, err := s.readDB.RoleParentInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	prole := proleGroups[role.ID]
 	if prole == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s is the root role", role.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	if roleID != prole.ID {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't have parent circle with id %s", c.ID, roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	childsGroups, err := s.readDB.ChildRolesInternal(curTlSeq, []util.ID{role.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	childs := childsGroups[role.ID]
 
@@ -1151,7 +1137,7 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 				if child.RoleType.IsCoreRoleType() {
 					res.HasErrors = true
 					res.GenericError = errors.Errorf("role %s to move to parent is a core role type (not a normal role or a circle)", rtp)
-					return res, 0, ErrValidation
+					return res, util.NilID, ErrValidation
 				}
 				found = true
 				break
@@ -1160,43 +1146,36 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 		if !found {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("role %s to move to parent is not a child of role %s", rtp, role.ID)
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, prole.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.ManageChildRoles {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleDeleteChildRole, nextTl, callingMember.ID, &commands.CircleDeleteChildRole{RoleID: roleID, DeleteRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleDeleteChildRole, callingMember.ID, &commands.CircleDeleteChildRole{RoleID: roleID, DeleteRoleChange: *c})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	skipchilds := []util.ID{}
 	for _, child := range childs {
@@ -1208,67 +1187,67 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 			}
 		}
 		if toParent {
-			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &commandCausationID, nextTl, child.ID, &prole.ID))
+			events = events.AddEvent(eventstore.NewEventRoleChangedParent(&correlationID, &causationID, &groupID, child.ID, &prole.ID))
 		}
 	}
 
-	es, err := s.deleteRole(correlationID, commandCausationID, curTl, nextTl, role.ID, skipchilds)
+	es, err := s.deleteRole(correlationID, causationID, groupID, curTl, role.ID, skipchilds)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	events = events.AddEvents(es)
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID util.ID, content string) (*change.SetRoleAdditionalContentResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID util.ID, content string) (*change.SetRoleAdditionalContentResult, util.ID, error) {
 	res := &change.SetRoleAdditionalContentResult{}
 	if len([]rune(content)) > MaxRoleAdditionalContentLength {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role additional content too long")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 	if role.RoleType != models.RoleTypeCircle {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s is not a circle", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.ManageRoleAdditionalContent {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	roleAdditionalContent := &models.RoleAdditionalContent{
@@ -1278,43 +1257,36 @@ func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID ut
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeSetRoleAdditionalContent, nextTl, callingMember.ID, commands.SetRoleAdditionalContent{RoleID: roleID, Content: content})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeSetRoleAdditionalContent, callingMember.ID, commands.SetRoleAdditionalContent{RoleID: roleID, Content: content})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventRoleAdditionalContentSet(&correlationID, &causationID, &groupID, roleID, roleAdditionalContent))
 
-	events = events.AddEvent(eventstore.NewEventRoleAdditionalContentSet(&correlationID, &commandCausationID, nextTl, roleID, roleAdditionalContent))
-
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) CreateMember(ctx context.Context, c *change.CreateMemberChange) (*change.CreateMemberResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CreateMember(ctx context.Context, c *change.CreateMemberChange) (*change.CreateMemberResult, util.ID, error) {
 	return s.createMember(ctx, c, true, true)
 }
 
-func (s *CommandService) CreateMemberInternal(ctx context.Context, c *change.CreateMemberChange, checkPassword bool, checkAuth bool) (*change.CreateMemberResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CreateMemberInternal(ctx context.Context, c *change.CreateMemberChange, checkPassword bool, checkAuth bool) (*change.CreateMemberResult, util.ID, error) {
 	return s.createMember(ctx, c, checkPassword, checkAuth)
 }
 
-func (s *CommandService) createMember(ctx context.Context, c *change.CreateMemberChange, checkPassword bool, checkAuth bool) (*change.CreateMemberResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) createMember(ctx context.Context, c *change.CreateMemberChange, checkPassword bool, checkAuth bool) (*change.CreateMemberResult, util.ID, error) {
 	res := &change.CreateMemberResult{}
 	if c.UserName == "" {
 		res.HasErrors = true
@@ -1384,19 +1356,19 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 		var err error
 		avatar, err = util.CropResizeAvatar(c.AvatarData.Avatar, c.AvatarData.CropX, c.AvatarData.CropY, c.AvatarData.CropSize)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 	} else {
 		var err error
 		avatar, err = util.RandomAvatarPNG(c.UserName)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 	}
 
 	ic, _, err := image.DecodeConfig(bytes.NewReader(avatar))
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if ic.Width != util.AvatarSize && ic.Height != util.AvatarSize {
 		res.HasErrors = true
@@ -1405,19 +1377,19 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMemberID := util.NilID
 	if checkAuth {
 		callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		// Only an admin can add members
 		if !callingMember.IsAdmin {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member not authorized")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 		callingMemberID = callingMember.ID
 	}
@@ -1427,7 +1399,7 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 	// instead of scanning all the members
 	members, err := s.readDB.MembersByIDsInternal(curTlSeq, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	for _, member := range members {
 		if c.UserName == member.UserName {
@@ -1444,7 +1416,7 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 		// check that the member matchUID isn't already in use
 		member, err := s.readDB.MemberByMatchUIDInternal(c.MatchUID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if member != nil {
 			res.HasErrors = true
@@ -1453,7 +1425,7 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	member := &models.Member{
@@ -1466,55 +1438,48 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
-
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
 
 	var passwordHash string
 	if c.Password != "" {
 		passwordHash, err = util.PasswordHash(c.Password)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 	}
 
-	command := commands.NewCommand(commands.CommandTypeCreateMember, nextTl, callingMemberID, commands.NewCommandCreateMember(c, passwordHash))
+	command := commands.NewCommand(commands.CommandTypeCreateMember, callingMemberID, commands.NewCommandCreateMember(c, passwordHash))
 
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventMemberCreated(&correlationID, &causationID, &groupID, member))
 
-	events = events.AddEvent(eventstore.NewEventMemberCreated(&correlationID, &commandCausationID, nextTl, member))
-
-	events = events.AddEvent(eventstore.NewEventMemberAvatarSet(&correlationID, &commandCausationID, nextTl, member.ID, avatar))
+	events = events.AddEvent(eventstore.NewEventMemberAvatarSet(&correlationID, &causationID, &groupID, member.ID, avatar))
 
 	if c.Password != "" {
-		events = events.AddEvent(eventstore.NewEventMemberPasswordSet(&correlationID, &commandCausationID, member.ID, passwordHash))
+		events = events.AddEvent(eventstore.NewEventMemberPasswordSet(&correlationID, &causationID, &groupID, member.ID, passwordHash))
 	}
 
 	if c.MatchUID != "" {
-		events = events.AddEvent(eventstore.NewEventMemberMatchUIDSet(&correlationID, &commandCausationID, member.ID, c.MatchUID))
+		events = events.AddEvent(eventstore.NewEventMemberMatchUIDSet(&correlationID, &causationID, &groupID, member.ID, c.MatchUID))
 	}
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	res.MemberID = &member.ID
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMemberChange) (*change.UpdateMemberResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMemberChange) (*change.UpdateMemberResult, util.ID, error) {
 	res := &change.UpdateMemberResult{}
 
 	if c.UserName == "" {
@@ -1559,16 +1524,16 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	member, err := s.readDB.MemberInternal(curTlSeq, c.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if member == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member with id %s doesn't exist", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	if c.UserName != "" && c.UserName != member.UserName && s.hasMemberProvider {
@@ -1576,18 +1541,18 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 		// name since it may be used to match the matchUID
 		res.HasErrors = true
 		res.UpdateMemberChangeErrors.UserName = errors.Errorf("user name cannot be changed")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	// Only an admin or the same member can update a member
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !callingMember.IsAdmin && callingMember.ID != member.ID {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	// check that the username and email aren't already in use
@@ -1595,7 +1560,7 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	// instead of scanning all the members
 	members, err := s.readDB.MembersByIDsInternal(curTlSeq, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	adminCount := 0
 	for _, m := range members {
@@ -1624,12 +1589,12 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	if c.AvatarData != nil {
 		avatar, err = util.CropResizeAvatar(c.AvatarData.Avatar, c.AvatarData.CropX, c.AvatarData.CropY, c.AvatarData.CropSize)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 
 		ic, _, err := image.DecodeConfig(bytes.NewReader(avatar))
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if ic.Width != util.AvatarSize && ic.Height != util.AvatarSize {
 			res.HasErrors = true
@@ -1639,7 +1604,7 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	// only an admin can make/remove another member as admin
@@ -1652,36 +1617,29 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeUpdateMember, nextTl, callingMember.ID, commands.NewCommandUpdateMember(c))
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeUpdateMember, callingMember.ID, commands.NewCommandUpdateMember(c))
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
-
-	events = events.AddEvent(eventstore.NewEventMemberUpdated(&correlationID, &commandCausationID, nextTl, member))
+	events = events.AddEvent(eventstore.NewEventMemberUpdated(&correlationID, &causationID, &groupID, member))
 
 	if avatar != nil {
-		events = events.AddEvent(eventstore.NewEventMemberAvatarSet(&correlationID, &commandCausationID, nextTl, member.ID, avatar))
+		events = events.AddEvent(eventstore.NewEventMemberAvatarSet(&correlationID, &causationID, &groupID, member.ID, avatar))
 	}
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
 func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID, curPassword, newPassword string) (*change.GenericResult, error) {
@@ -1701,7 +1659,7 @@ func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID
 
 	curTl := s.readDB.CurTimeLine()
 
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	// Only the same user or an admin can set member password
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
@@ -1725,6 +1683,7 @@ func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
 	passwordHash, err := util.PasswordHash(newPassword)
@@ -1732,16 +1691,14 @@ func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID
 		return nil, err
 	}
 
-	// NOTE(sgotti) Changing a password doesn't require a new timeline since there's no history of previous password, the command will have an empty timeline
-	command := commands.NewCommand(commands.CommandTypeSetMemberPassword, &util.TimeLine{}, callingMember.ID, commands.SetMemberPassword{MemberID: memberID, PasswordHash: passwordHash})
+	command := commands.NewCommand(commands.CommandTypeSetMemberPassword, callingMember.ID, commands.SetMemberPassword{MemberID: memberID, PasswordHash: passwordHash})
 
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventMemberPasswordSet(&correlationID, &commandCausationID, memberID, passwordHash))
+	events = events.AddEvent(eventstore.NewEventMemberPasswordSet(&correlationID, &causationID, &groupID, memberID, passwordHash))
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
 		return nil, err
@@ -1770,7 +1727,7 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 
 	curTl := s.readDB.CurTimeLine()
 
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMemberID := util.NilID
 	if !internal {
@@ -1800,18 +1757,18 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
 	// NOTE(sgotti) Changing a password doesn't require a new timeline since there's no history of previous password, the command will have an empty timeline
-	command := commands.NewCommand(commands.CommandTypeSetMemberMatchUID, &util.TimeLine{}, callingMemberID, commands.SetMemberMatchUID{MemberID: memberID, MatchUID: matchUID})
+	command := commands.NewCommand(commands.CommandTypeSetMemberMatchUID, callingMemberID, commands.SetMemberMatchUID{MemberID: memberID, MatchUID: matchUID})
 
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventMemberMatchUIDSet(&correlationID, &commandCausationID, memberID, matchUID))
+	events = events.AddEvent(eventstore.NewEventMemberMatchUIDSet(&correlationID, &causationID, &groupID, memberID, matchUID))
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
 		return nil, err
@@ -1823,7 +1780,7 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 	return res, nil
 }
 
-func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTensionChange) (*change.CreateTensionResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTensionChange) (*change.CreateTensionResult, util.ID, error) {
 	res := &change.CreateTensionResult{}
 	if c.Title == "" {
 		res.HasErrors = true
@@ -1839,37 +1796,37 @@ func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTens
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	if c.RoleID != nil {
 		role, err := s.readDB.RoleInternal(curTlSeq, *c.RoleID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if role == nil {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("role with id %s doesn't exist", c.RoleID)
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 		if role.RoleType != models.RoleTypeCircle {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("role with id %s is not a circle", c.RoleID)
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 		// Check that the user is a member of the role
 		// TODO(sgotti) if the user will be removed we currently leave the tensions as is
 		circleMemberEdgesGroups, err := s.readDB.CircleMemberEdgesInternal(curTlSeq, []util.ID{role.ID})
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		isRoleMember := false
 		circleMemberEdges := circleMemberEdgesGroups[role.ID]
@@ -1882,26 +1839,19 @@ func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTens
 		if !isRoleMember {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member is not member of role")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCreateTension, nextTl, callingMember.ID, commands.NewCommandCreateTension(c))
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCreateTension, callingMember.ID, commands.NewCommandCreateTension(c))
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	tension := &models.Tension{
 		Title:       c.Title,
@@ -1909,22 +1859,22 @@ func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTens
 	}
 	tension.ID = s.uidGenerator.UUID(tension.Title)
 
-	events = events.AddEvent(eventstore.NewEventTensionCreated(&correlationID, &commandCausationID, nextTl, tension, callingMember.ID, c.RoleID))
+	events = events.AddEvent(eventstore.NewEventTensionCreated(&correlationID, &causationID, &groupID, tension, callingMember.ID, c.RoleID))
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	res.TensionID = &tension.ID
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTensionChange) (*change.UpdateTensionResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTensionChange) (*change.UpdateTensionResult, util.ID, error) {
 	res := &change.UpdateTensionResult{}
 	if c.Title == "" {
 		res.HasErrors = true
@@ -1940,43 +1890,43 @@ func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTens
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	tension, err := s.readDB.TensionInternal(curTlSeq, c.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	if tension == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("tension with id %s doesn't exist", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	if tension.Closed {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("tension already closed")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	tensionMemberGroups, err := s.readDB.TensionMemberInternal(curTlSeq, []util.ID{tension.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	tensionMember := tensionMemberGroups[tension.ID]
 
 	tensionRoleGroups, err := s.readDB.TensionRoleInternal(curTlSeq, []util.ID{tension.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	tensionRole := tensionRoleGroups[tension.ID]
 
@@ -1984,29 +1934,29 @@ func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTens
 	if !callingMember.IsAdmin && callingMember.ID != tensionMember.ID {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	if c.RoleID != nil {
 		role, err := s.readDB.RoleInternal(curTlSeq, *c.RoleID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if role == nil {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("role with id %s doesn't exist", c.RoleID)
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 		if role.RoleType != models.RoleTypeCircle {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("role with id %s is not a circle", c.RoleID)
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 		// Check that the user is a member of the role
 		// TODO(sgotti) if the user will be removed we currently leave the tensions as is
 		circleMemberEdgesGroups, err := s.readDB.CircleMemberEdgesInternal(curTlSeq, []util.ID{role.ID})
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		isRoleMember := false
 		circleMemberEdges := circleMemberEdgesGroups[role.ID]
@@ -2019,7 +1969,7 @@ func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTens
 		if !isRoleMember {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member is not member of role")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
@@ -2042,75 +1992,68 @@ func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTens
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeUpdateTension, nextTl, callingMember.ID, commands.NewCommandUpdateTension(c))
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeUpdateTension, callingMember.ID, commands.NewCommandUpdateTension(c))
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	if roleChanged {
-		events = events.AddEvent(eventstore.NewEventTensionRoleChanged(&correlationID, &commandCausationID, nextTl, tension.ID, prevRoleID, c.RoleID))
+		events = events.AddEvent(eventstore.NewEventTensionRoleChanged(&correlationID, &causationID, &groupID, tension.ID, prevRoleID, c.RoleID))
 	}
 
-	events = events.AddEvent(eventstore.NewEventTensionUpdated(&correlationID, &commandCausationID, nextTl, tension))
+	events = events.AddEvent(eventstore.NewEventTensionUpdated(&correlationID, &causationID, &groupID, tension))
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) CloseTension(ctx context.Context, c *change.CloseTensionChange) (*change.CloseTensionResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CloseTension(ctx context.Context, c *change.CloseTensionChange) (*change.CloseTensionResult, util.ID, error) {
 	res := &change.CloseTensionResult{}
 
 	if len([]rune(c.Reason)) > MaxTensionCloseReasonLength {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("close reason too long")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	tension, err := s.readDB.TensionInternal(curTlSeq, c.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
 	if tension == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("tension with id %s doesn't exist", c.ID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	if tension.Closed {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("tension already closed")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	tensionMemberGroups, err := s.readDB.TensionMemberInternal(curTlSeq, []util.ID{tension.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	tensionMember := tensionMemberGroups[tension.ID]
 
@@ -2118,147 +2061,133 @@ func (s *CommandService) CloseTension(ctx context.Context, c *change.CloseTensio
 	if !callingMember.IsAdmin && callingMember.ID != tensionMember.ID {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCloseTension, nextTl, callingMember.ID, commands.NewCommandCloseTension(c))
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCloseTension, callingMember.ID, commands.NewCommandCloseTension(c))
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventTensionClosed(&correlationID, &causationID, &groupID, tension.ID, c.Reason))
 
-	events = events.AddEvent(eventstore.NewEventTensionClosed(&correlationID, &commandCausationID, nextTl, tension.ID, c.Reason))
-
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
 // CircleAddDirectMember adds a member as a core role member the specified circle
-func (s *CommandService) CircleAddDirectMember(ctx context.Context, roleID util.ID, memberID util.ID) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleAddDirectMember(ctx context.Context, roleID util.ID, memberID util.ID) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.AssignCircleDirectMembers {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
-		return nil, 0, errors.Errorf("role with id %s doesn't exist", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s doesn't exist", roleID)
 	}
 	if role.RoleType != models.RoleTypeCircle {
-		return nil, 0, errors.Errorf("role with id %s is not a circle", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s is not a circle", roleID)
 	}
 
 	member, err := s.readDB.MemberInternal(curTlSeq, memberID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if member == nil {
-		return nil, 0, errors.Errorf("member with id %s doesn't exist", memberID)
+		return nil, util.NilID, errors.Errorf("member with id %s doesn't exist", memberID)
 	}
 
 	if res.HasErrors {
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleAddDirectMember, nextTl, callingMember.ID, &commands.CircleAddDirectMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleAddDirectMember, callingMember.ID, &commands.CircleAddDirectMember{RoleID: roleID, MemberID: memberID})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventCircleDirectMemberAdded(&correlationID, &causationID, &groupID, roleID, memberID))
 
-	events = events.AddEvent(eventstore.NewEventCircleDirectMemberAdded(&correlationID, &commandCausationID, nextTl, roleID, memberID))
-
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) CircleRemoveDirectMember(ctx context.Context, roleID util.ID, memberID util.ID) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleRemoveDirectMember(ctx context.Context, roleID util.ID, memberID util.ID) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.AssignCircleDirectMembers {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
-		return nil, 0, errors.Errorf("role with id %s doesn't exist", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s doesn't exist", roleID)
 	}
 	if role.RoleType != models.RoleTypeCircle {
-		return nil, 0, errors.Errorf("role with id %s is not a circle", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s is not a circle", roleID)
 	}
 
 	circleDirectMembersGroups, err := s.readDB.CircleDirectMembersInternal(curTlSeq, []util.ID{roleID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	circleDirectMembers := circleDirectMembersGroups[roleID]
 	found := false
@@ -2269,156 +2198,142 @@ func (s *CommandService) CircleRemoveDirectMember(ctx context.Context, roleID ut
 		}
 	}
 	if !found {
-		return nil, 0, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
+		return nil, util.NilID, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleRemoveDirectMember, nextTl, callingMember.ID, &commands.CircleRemoveDirectMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleRemoveDirectMember, callingMember.ID, &commands.CircleRemoveDirectMember{RoleID: roleID, MemberID: memberID})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventCircleDirectMemberRemoved(&correlationID, &causationID, &groupID, roleID, memberID))
 
-	events = events.AddEvent(eventstore.NewEventCircleDirectMemberRemoved(&correlationID, &commandCausationID, nextTl, roleID, memberID))
-
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) CircleSetLeadLinkMember(ctx context.Context, roleID, memberID util.ID) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleSetLeadLinkMember(ctx context.Context, roleID, memberID util.ID) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 	if role.RoleType != models.RoleTypeCircle {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s isn't a circle", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	// get the role parent circle
 	parentCircleGroups, err := s.readDB.RoleParentInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	parentCircle := parentCircleGroups[role.ID]
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	// if the parent circle doesn't exists we are the root circle
 	// do special handling
 	if parentCircle == nil {
 		cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, role.ID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if !cp.AssignRootCircleLeadLink {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member not authorized")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	} else {
 		cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, parentCircle.ID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if !cp.AssignChildCircleLeadLink {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member not authorized")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
 	leadLinkRoleGroups, err := s.readDB.CircleCoreRoleInternal(curTlSeq, models.RoleTypeLeadLink, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	leadLinkRole := leadLinkRoleGroups[role.ID]
 
 	leadLinkMemberEdgesGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{leadLinkRole.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	leadLinkMemberEdges := leadLinkMemberEdgesGroups[leadLinkRole.ID]
 
 	member, err := s.readDB.MemberInternal(curTlSeq, memberID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if member == nil {
-		return nil, 0, errors.Errorf("member with id %s doesn't exist", memberID)
+		return nil, util.NilID, errors.Errorf("member with id %s doesn't exist", memberID)
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleSetLeadLinkMember, nextTl, callingMember.ID, &commands.CircleSetLeadLinkMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleSetLeadLinkMember, callingMember.ID, &commands.CircleSetLeadLinkMember{RoleID: roleID, MemberID: memberID})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	// Remove previous lead link
 	if len(leadLinkMemberEdges) > 0 {
-		es, err := s.circleUnsetLeadLinkMember(correlationID, commandCausationID, nextTl, role.ID)
+		es, err := s.circleUnsetLeadLinkMember(correlationID, causationID, groupID, curTl, role.ID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		events = events.AddEvents(es)
 	}
 
-	events = events.AddEvent(eventstore.NewEventCircleLeadLinkMemberSet(&correlationID, &commandCausationID, nextTl, roleID, leadLinkRole.ID, memberID))
+	events = events.AddEvent(eventstore.NewEventCircleLeadLinkMemberSet(&correlationID, &causationID, &groupID, roleID, leadLinkRole.ID, memberID))
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) circleUnsetLeadLinkMember(correlationID, causationID util.ID, nextTl *util.TimeLine, roleID util.ID) (eventstore.Events, error) {
-	curTlSeq := nextTl.SequenceNumber - 1
+func (s *CommandService) circleUnsetLeadLinkMember(correlationID, causationID, groupID util.ID, curTl *util.TimeLine, roleID util.ID) (eventstore.Events, error) {
+	curTlSeq := curTl.Number()
 	events := eventstore.NewEvents()
 
 	leadLinkRoleGroups, err := s.readDB.CircleCoreRoleInternal(curTlSeq, models.RoleTypeLeadLink, []util.ID{roleID})
@@ -2437,208 +2352,194 @@ func (s *CommandService) circleUnsetLeadLinkMember(correlationID, causationID ut
 		return nil, nil
 	}
 
-	events = events.AddEvent(eventstore.NewEventCircleLeadLinkMemberUnset(&correlationID, &causationID, nextTl, roleID, leadLinkRole.ID, leadLinkMemberEdges[0].Member.ID))
+	events = events.AddEvent(eventstore.NewEventCircleLeadLinkMemberUnset(&correlationID, &causationID, &groupID, roleID, leadLinkRole.ID, leadLinkMemberEdges[0].Member.ID))
 
 	return events, nil
 }
 
-func (s *CommandService) CircleUnsetLeadLinkMember(ctx context.Context, roleID util.ID) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleUnsetLeadLinkMember(ctx context.Context, roleID util.ID) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 	if role.RoleType != models.RoleTypeCircle {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s isn't a circle", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	// get the role parent circle
 	parentCircleGroups, err := s.readDB.RoleParentInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	parentCircle := parentCircleGroups[role.ID]
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	// if the parent circle doesn't exists we are the root circle
 	// do special handling
 	if parentCircle == nil {
 		cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, role.ID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if !cp.AssignRootCircleLeadLink {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member not authorized")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	} else {
 		cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, parentCircle.ID)
 		if err != nil {
-			return nil, 0, err
+			return nil, util.NilID, err
 		}
 		if !cp.AssignChildCircleLeadLink {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member not authorized")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
 	leadLinkGroups, err := s.readDB.CircleCoreRoleInternal(curTlSeq, models.RoleTypeLeadLink, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	leadLink := leadLinkGroups[role.ID]
 
 	leadLinkMemberEdgesGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{leadLink.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	leadLinkMemberEdges := leadLinkMemberEdgesGroups[leadLink.ID]
 	if len(leadLinkMemberEdges) == 0 {
 		// no member assigned as lead link, don't error, just do nothing
-		return res, curTlSeq, nil
+		return res, util.NilID, nil
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleUnsetLeadLinkMember, nextTl, callingMember.ID, &commands.CircleUnsetLeadLinkMember{RoleID: roleID})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleUnsetLeadLinkMember, callingMember.ID, &commands.CircleUnsetLeadLinkMember{RoleID: roleID})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
-
-	es, err := s.circleUnsetLeadLinkMember(correlationID, commandCausationID, nextTl, role.ID)
+	es, err := s.circleUnsetLeadLinkMember(correlationID, causationID, groupID, curTl, role.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	events = events.AddEvents(es)
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) CircleSetCoreRoleMember(ctx context.Context, roleType models.RoleType, roleID, memberID util.ID, electionExpiration *time.Time) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleSetCoreRoleMember(ctx context.Context, roleType models.RoleType, roleID, memberID util.ID, electionExpiration *time.Time) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 	if role.RoleType != models.RoleTypeCircle {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s isn't a circle", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, role.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.AssignCircleCoreRoles {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	coreRoleGroups, err := s.readDB.CircleCoreRoleInternal(curTlSeq, roleType, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	coreRole := coreRoleGroups[role.ID]
 
 	coreRoleMemberEdgesGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{coreRole.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	coreRoleMemberEdges := coreRoleMemberEdgesGroups[coreRole.ID]
 
 	member, err := s.readDB.MemberInternal(curTlSeq, memberID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if member == nil {
-		return nil, 0, errors.Errorf("member with id %s doesn't exist", memberID)
+		return nil, util.NilID, errors.Errorf("member with id %s doesn't exist", memberID)
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleSetCoreRoleMember, nextTl, callingMember.ID, &commands.CircleSetCoreRoleMember{RoleType: roleType, RoleID: roleID, MemberID: memberID, ElectionExpiration: electionExpiration})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleSetCoreRoleMember, callingMember.ID, &commands.CircleSetCoreRoleMember{RoleType: roleType, RoleID: roleID, MemberID: memberID, ElectionExpiration: electionExpiration})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	// Remove previous core role member
 	if len(coreRoleMemberEdges) > 0 {
-		events = events.AddEvent(eventstore.NewEventCircleCoreRoleMemberUnset(&correlationID, &commandCausationID, nextTl, role.ID, coreRole.ID, coreRoleMemberEdges[0].Member.ID, roleType))
+		events = events.AddEvent(eventstore.NewEventCircleCoreRoleMemberUnset(&correlationID, &causationID, &groupID, role.ID, coreRole.ID, coreRoleMemberEdges[0].Member.ID, roleType))
 	}
 
-	events = events.AddEvent(eventstore.NewEventCircleCoreRoleMemberSet(&correlationID, &commandCausationID, nextTl, role.ID, coreRole.ID, memberID, roleType, electionExpiration))
+	events = events.AddEvent(eventstore.NewEventCircleCoreRoleMemberSet(&correlationID, &causationID, &groupID, role.ID, coreRole.ID, memberID, roleType, electionExpiration))
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) circleUnsetCoreRoleMember(correlationID, causationID util.ID, nextTl *util.TimeLine, roleType models.RoleType, roleID util.ID) (eventstore.Events, error) {
-	curTlSeq := nextTl.SequenceNumber - 1
+func (s *CommandService) circleUnsetCoreRoleMember(correlationID, causationID, groupID util.ID, curTl *util.TimeLine, roleType models.RoleType, roleID util.ID) (eventstore.Events, error) {
+	curTlSeq := curTl.Number()
 	events := eventstore.NewEvents()
 
 	coreRoleGroups, err := s.readDB.CircleCoreRoleInternal(curTlSeq, roleType, []util.ID{roleID})
@@ -2657,234 +2558,220 @@ func (s *CommandService) circleUnsetCoreRoleMember(correlationID, causationID ut
 		return nil, nil
 	}
 
-	events = events.AddEvent(eventstore.NewEventCircleCoreRoleMemberUnset(&correlationID, &causationID, nextTl, roleID, coreRole.ID, coreRoleMemberEdges[0].Member.ID, roleType))
+	events = events.AddEvent(eventstore.NewEventCircleCoreRoleMemberUnset(&correlationID, &causationID, &groupID, roleID, coreRole.ID, coreRoleMemberEdges[0].Member.ID, roleType))
 
 	return events, nil
 }
 
-func (s *CommandService) CircleUnsetCoreRoleMember(ctx context.Context, roleType models.RoleType, roleID util.ID) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) CircleUnsetCoreRoleMember(ctx context.Context, roleType models.RoleType, roleID util.ID) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s doesn't exist", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 	if role.RoleType != models.RoleTypeCircle {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("role with id %s isn't a circle", roleID)
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, role.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.AssignCircleCoreRoles {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	coreRoleGroups, err := s.readDB.CircleCoreRoleInternal(curTlSeq, roleType, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	coreRole := coreRoleGroups[role.ID]
 
 	coreRoleMemberEdgesGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{coreRole.ID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	coreRoleMemberEdges := coreRoleMemberEdgesGroups[coreRole.ID]
 	if len(coreRoleMemberEdges) == 0 {
 		// no member assigned to core role, don't error, just do nothing
-		return res, curTlSeq, nil
+		return res, util.NilID, nil
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeCircleUnsetCoreRoleMember, nextTl, callingMember.ID, &commands.CircleUnsetCoreRoleMember{RoleType: roleType, RoleID: roleID})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeCircleUnsetCoreRoleMember, callingMember.ID, &commands.CircleUnsetCoreRoleMember{RoleType: roleType, RoleID: roleID})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
-
-	es, err := s.circleUnsetCoreRoleMember(correlationID, commandCausationID, nextTl, roleType, role.ID)
+	es, err := s.circleUnsetCoreRoleMember(correlationID, causationID, groupID, curTl, roleType, role.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	events = events.AddEvents(es)
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) RoleAddMember(ctx context.Context, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) RoleAddMember(ctx context.Context, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	if focus != nil {
 		if len([]rune(*focus)) > MaxRoleAssignmentFocusLength {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("focus too long")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
-		return nil, 0, errors.Errorf("role with id %s doesn't exist", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s doesn't exist", roleID)
 	}
 	if role.RoleType != models.RoleTypeNormal {
-		return nil, 0, errors.Errorf("role with id %s isn't a normal role", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s isn't a normal role", roleID)
 	}
 
 	// get the role parent circle
 	circleGroups, err := s.readDB.RoleParentInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	circle := circleGroups[role.ID]
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, circle.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.AssignChildRoleMembers {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	roleMemberEdgesGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{roleID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	roleMemberEdges := roleMemberEdgesGroups[roleID]
 	for _, rm := range roleMemberEdges {
 		if rm.Member.ID == memberID {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member %s already assigned to role %s", rm.Member.UserName, roleID)
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
 	member, err := s.readDB.MemberInternal(curTlSeq, memberID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if member == nil {
-		return nil, 0, errors.Errorf("member with id %s doesn't exist", memberID)
+		return nil, util.NilID, errors.Errorf("member with id %s doesn't exist", memberID)
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeRoleAddMember, nextTl, callingMember.ID, &commands.RoleAddMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeRoleAddMember, callingMember.ID, &commands.RoleAddMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventRoleMemberAdded(&correlationID, &causationID, &groupID, roleID, memberID, focus, noCoreMember))
 
-	events = events.AddEvent(eventstore.NewEventRoleMemberAdded(&correlationID, &commandCausationID, nextTl, roleID, memberID, focus, noCoreMember))
-
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) RoleRemoveMember(ctx context.Context, roleID util.ID, memberID util.ID) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) RoleRemoveMember(ctx context.Context, roleID util.ID, memberID util.ID) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
-		return nil, 0, errors.Errorf("role with id %s doesn't exist", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s doesn't exist", roleID)
 	}
 	if role.RoleType != models.RoleTypeNormal {
-		return nil, 0, errors.Errorf("role with id %s isn't a normal role", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s isn't a normal role", roleID)
 	}
 
 	// get the role parent circle
 	circleGroups, err := s.readDB.RoleParentInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	circle := circleGroups[role.ID]
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, circle.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.AssignChildRoleMembers {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	roleMembersGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{roleID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	roleMembers := roleMembersGroups[roleID]
 	var curMemberEdge *models.RoleMemberEdge
@@ -2895,89 +2782,82 @@ func (s *CommandService) RoleRemoveMember(ctx context.Context, roleID util.ID, m
 		}
 	}
 	if curMemberEdge == nil {
-		return nil, 0, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
+		return nil, util.NilID, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeRoleRemoveMember, nextTl, callingMember.ID, &commands.RoleRemoveMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeRoleRemoveMember, callingMember.ID, &commands.RoleRemoveMember{RoleID: roleID, MemberID: memberID})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventRoleMemberRemoved(&correlationID, &causationID, &groupID, roleID, memberID))
 
-	events = events.AddEvent(eventstore.NewEventRoleMemberRemoved(&correlationID, &commandCausationID, nextTl, roleID, memberID))
-
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) RoleUpdateMember(ctx context.Context, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) (*change.GenericResult, util.TimeLineSequenceNumber, error) {
+func (s *CommandService) RoleUpdateMember(ctx context.Context, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) (*change.GenericResult, util.ID, error) {
 	res := &change.GenericResult{}
 
 	if focus != nil {
 		if len([]rune(*focus)) > MaxRoleAssignmentFocusLength {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("focus too long")
-			return res, 0, ErrValidation
+			return res, util.NilID, ErrValidation
 		}
 	}
 
 	curTl := s.readDB.CurTimeLine()
-	curTlSeq := curTl.SequenceNumber
+	curTlSeq := curTl.Number()
 
 	role, err := s.readDB.RoleInternal(curTlSeq, roleID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if role == nil {
-		return nil, 0, errors.Errorf("role with id %s doesn't exist", roleID)
+		return nil, util.NilID, errors.Errorf("role with id %s doesn't exist", roleID)
 	}
 	// only normal roles can be updated
 	if role.RoleType != models.RoleTypeNormal {
-		return nil, 0, errors.Errorf("role with id %s is of wrong type %s", roleID, role.RoleType)
+		return nil, util.NilID, errors.Errorf("role with id %s is of wrong type %s", roleID, role.RoleType)
 	}
 
 	// get the role parent circle
 	circleGroups, err := s.readDB.RoleParentInternal(curTlSeq, []util.ID{role.ID})
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	circle := circleGroups[role.ID]
 
 	callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	cp, err := s.readDB.MemberCirclePermissions(ctx, curTlSeq, circle.ID)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if !cp.AssignChildRoleMembers {
 		res.HasErrors = true
 		res.GenericError = errors.Errorf("member not authorized")
-		return res, 0, ErrValidation
+		return res, util.NilID, ErrValidation
 	}
 
 	roleMembersGroups, err := s.readDB.RoleMemberEdgesInternal(curTlSeq, []util.ID{roleID}, nil)
 	if err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	roleMembers := roleMembersGroups[roleID]
 	var curMemberEdge *models.RoleMemberEdge
@@ -2988,40 +2868,33 @@ func (s *CommandService) RoleUpdateMember(ctx context.Context, roleID util.ID, m
 		}
 	}
 	if curMemberEdge == nil {
-		return nil, 0, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
+		return nil, util.NilID, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
 	}
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeRoleUpdateMember, nextTl, callingMember.ID, &commands.RoleUpdateMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeRoleUpdateMember, callingMember.ID, &commands.RoleUpdateMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
 
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
+	events = events.AddEvent(eventstore.NewEventRoleMemberUpdated(&correlationID, &causationID, &groupID, roleID, memberID, focus, noCoreMember))
 
-	events = events.AddEvent(eventstore.NewEventRoleMemberUpdated(&correlationID, &commandCausationID, nextTl, roleID, memberID, focus, noCoreMember))
-
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 	if err := s.readDB.ApplyEvents(events); err != nil {
-		return nil, 0, err
+		return nil, util.NilID, err
 	}
 
-	return res, nextTl.SequenceNumber, nil
+	return res, groupID, nil
 }
 
-func (s *CommandService) roleAddCoreRoles(correlationID, causationID util.ID, tl *util.TimeLine, role *models.Role, isRootRole bool) (eventstore.Events, error) {
+func (s *CommandService) roleAddCoreRoles(correlationID, causationID, groupID util.ID, role *models.Role, isRootRole bool) (eventstore.Events, error) {
 	events := eventstore.NewEvents()
 
 	for _, coreRoleDefinition := range models.GetCoreRoles() {
@@ -3035,17 +2908,17 @@ func (s *CommandService) roleAddCoreRoles(correlationID, causationID util.ID, tl
 		}
 		coreRole.ID = s.uidGenerator.UUID(fmt.Sprintf("%s-%s", role.Name, coreRole.Name))
 
-		events = events.AddEvent(eventstore.NewEventRoleCreated(&correlationID, &causationID, tl, coreRole, &role.ID))
+		events = events.AddEvent(eventstore.NewEventRoleCreated(&correlationID, &causationID, &groupID, coreRole, &role.ID))
 
 		domains := coreRoleDefinition.Domains
 		for _, domain := range domains {
 			domain.ID = s.uidGenerator.UUID(fmt.Sprintf("%s-%s-%s", role.Name, coreRole.Name, domain.Description))
-			events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &causationID, tl, coreRole.ID, domain))
+			events = events.AddEvent(eventstore.NewEventRoleDomainCreated(&correlationID, &causationID, &groupID, coreRole.ID, domain))
 		}
 		accountabilities := coreRoleDefinition.Accountabilities
 		for _, accountability := range accountabilities {
 			accountability.ID = s.uidGenerator.UUID(fmt.Sprintf("%s-%s-%s", role.Name, coreRole.Name, accountability.Description))
-			events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &causationID, tl, coreRole.ID, accountability))
+			events = events.AddEvent(eventstore.NewEventRoleAccountabilityCreated(&correlationID, &causationID, &groupID, coreRole.ID, accountability))
 		}
 	}
 
@@ -3060,31 +2933,24 @@ func (s *CommandService) SetupRootRole() (util.ID, error) {
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
+	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	nextTl, err := s.nextTimeLine()
-	if err != nil {
-		return util.NilID, err
-	}
-
-	command := commands.NewCommand(commands.CommandTypeSetupRootRole, nextTl, util.NilID, &commands.SetupRootRole{})
-	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, command)
+	command := commands.NewCommand(commands.CommandTypeSetupRootRole, util.NilID, &commands.SetupRootRole{})
+	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, command)
 	events = events.AddEvent(commandEvent)
-	commandCausationID := commandEvent.ID
-
-	events = events.AddEvent(eventstore.NewEventTimeLineCreated(&correlationID, &commandCausationID, nextTl))
 
 	role.ID = s.uidGenerator.UUID("RootRole")
 
-	events = events.AddEvent(eventstore.NewEventRoleCreated(&correlationID, &commandCausationID, nextTl, role, nil))
+	events = events.AddEvent(eventstore.NewEventRoleCreated(&correlationID, &causationID, &groupID, role, nil))
 
-	es, err := s.roleAddCoreRoles(correlationID, commandCausationID, nextTl, role, true)
+	es, err := s.roleAddCoreRoles(correlationID, causationID, groupID, role, true)
 	if err != nil {
 		return util.NilID, err
 	}
 	events = events.AddEvents(es)
 
-	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
+	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &causationID, &groupID, command))
 
 	if err := s.writeEvents(events); err != nil {
 		return util.NilID, err

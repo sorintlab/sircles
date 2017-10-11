@@ -54,23 +54,20 @@ const (
 
 type Command struct {
 	CommandType CommandType
-	TimeLine    *util.TimeLine
 	IssuerID    util.ID
 	Data        interface{}
 }
 
 type CommandRaw struct {
 	CommandType CommandType
-	TimeLine    *util.TimeLine
 	IssuerID    util.ID
 	Data        json.RawMessage
 }
 
-func NewCommand(commandType CommandType, timeLine *util.TimeLine, issuerID util.ID, commandData interface{}) *Command {
+func NewCommand(commandType CommandType, issuerID util.ID, commandData interface{}) *Command {
 	// TODO(sgotti) detect commandType from commandData real type
 	return &Command{
 		CommandType: commandType,
-		TimeLine:    timeLine,
 		IssuerID:    issuerID,
 		Data:        commandData,
 	}
@@ -89,7 +86,6 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 	}
 
 	c.CommandType = cr.CommandType
-	c.TimeLine = cr.TimeLine
 	c.IssuerID = cr.IssuerID
 	c.Data = d
 

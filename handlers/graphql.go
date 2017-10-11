@@ -105,7 +105,7 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.config.AdminMember != "" {
 		readDB.SetForceAdminMemberUserName(h.config.AdminMember)
 	}
-	commandService := command.NewCommandService(tx, readDB, nil, h.memberProvider != nil)
+	commandService := command.NewCommandService(tx, readDB, nil, nil, h.memberProvider != nil)
 
 	ctx := r.Context()
 	ctx = context.WithValue(ctx, "service", readDB)

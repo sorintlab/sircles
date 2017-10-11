@@ -31,44 +31,45 @@ const (
 type ReadDB interface {
 	// Queries
 	CurTimeLine() *util.TimeLine
-	TimeLine(util.TimeLineSequenceNumber) (*util.TimeLine, error)
-	TimeLines(tl util.TimeLineSequenceNumber, first int) ([]*util.TimeLine, bool, error)
+	TimeLine(util.TimeLineNumber) (*util.TimeLine, error)
+	TimeLines(tl util.TimeLineNumber, limit int, after bool) ([]*util.TimeLine, bool, error)
 	TimeLineAtTimeStamp(time.Time) (*util.TimeLine, error)
+	TimeLineForGroupID(groupID util.ID) (*util.TimeLine, error)
 
-	CallingMember(ctx context.Context) (*models.Member, util.TimeLineSequenceNumber, error)
-	RootRole(ctx context.Context, tl util.TimeLineSequenceNumber) (*models.Role, error)
-	Role(ctx context.Context, tl util.TimeLineSequenceNumber, id util.ID) (*models.Role, error)
+	CallingMember(ctx context.Context) (*models.Member, util.TimeLineNumber, error)
+	RootRole(ctx context.Context, tl util.TimeLineNumber) (*models.Role, error)
+	Role(ctx context.Context, tl util.TimeLineNumber, id util.ID) (*models.Role, error)
 	MemberMatchUID(ctx context.Context, memberID util.ID) (string, error)
 	MemberByMatchUID(ctx context.Context, matchUID string) (*models.Member, error)
-	MemberByUserName(ctx context.Context, tl util.TimeLineSequenceNumber, userName string) (*models.Member, error)
-	MemberByEmail(ctx context.Context, tl util.TimeLineSequenceNumber, email string) (*models.Member, error)
-	Member(ctx context.Context, tl util.TimeLineSequenceNumber, id util.ID) (*models.Member, error)
-	Tension(ctx context.Context, tl util.TimeLineSequenceNumber, id util.ID) (*models.Tension, error)
-	MembersByIDs(ctx context.Context, tl util.TimeLineSequenceNumber, membersIDs []util.ID) ([]*models.Member, error)
-	Members(ctx context.Context, tl util.TimeLineSequenceNumber, searchString string, first int, after *string) ([]*models.Member, bool, error)
-	Roles(ctx context.Context, tl util.TimeLineSequenceNumber, rolesIDs []util.ID) ([]*models.Role, error)
-	RolesAdditionalContent(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID]*models.RoleAdditionalContent, error)
+	MemberByUserName(ctx context.Context, tl util.TimeLineNumber, userName string) (*models.Member, error)
+	MemberByEmail(ctx context.Context, tl util.TimeLineNumber, email string) (*models.Member, error)
+	Member(ctx context.Context, tl util.TimeLineNumber, id util.ID) (*models.Member, error)
+	Tension(ctx context.Context, tl util.TimeLineNumber, id util.ID) (*models.Tension, error)
+	MembersByIDs(ctx context.Context, tl util.TimeLineNumber, membersIDs []util.ID) ([]*models.Member, error)
+	Members(ctx context.Context, tl util.TimeLineNumber, searchString string, first int, after *string) ([]*models.Member, bool, error)
+	Roles(ctx context.Context, tl util.TimeLineNumber, rolesIDs []util.ID) ([]*models.Role, error)
+	RolesAdditionalContent(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID]*models.RoleAdditionalContent, error)
 
-	RoleParent(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID]*models.Role, error)
-	RoleParents(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Role, error)
-	ChildRoles(tl util.TimeLineSequenceNumber, parentsIDs []util.ID) (map[util.ID][]*models.Role, error)
-	MemberCircleEdges(tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberCircleEdge, error)
-	MemberRoleEdges(tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberRoleEdge, error)
-	MemberTensions(ctx context.Context, tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.Tension, error)
-	TensionMember(tl util.TimeLineSequenceNumber, tensionsIDs []util.ID) (map[util.ID]*models.Member, error)
-	RoleMemberEdges(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.RoleMemberEdge, error)
-	CircleMemberEdges(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.CircleMemberEdge, error)
-	RoleDomains(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Domain, error)
-	RoleAccountabilities(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Accountability, error)
-	RoleTensions(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Tension, error)
-	TensionRole(tl util.TimeLineSequenceNumber, tensionsIDs []util.ID) (map[util.ID]*models.Role, error)
+	RoleParent(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID]*models.Role, error)
+	RoleParents(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Role, error)
+	ChildRoles(tl util.TimeLineNumber, parentsIDs []util.ID) (map[util.ID][]*models.Role, error)
+	MemberCircleEdges(tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberCircleEdge, error)
+	MemberRoleEdges(tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberRoleEdge, error)
+	MemberTensions(ctx context.Context, tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.Tension, error)
+	TensionMember(tl util.TimeLineNumber, tensionsIDs []util.ID) (map[util.ID]*models.Member, error)
+	RoleMemberEdges(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.RoleMemberEdge, error)
+	CircleMemberEdges(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.CircleMemberEdge, error)
+	RoleDomains(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Domain, error)
+	RoleAccountabilities(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Accountability, error)
+	RoleTensions(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Tension, error)
+	TensionRole(tl util.TimeLineNumber, tensionsIDs []util.ID) (map[util.ID]*models.Role, error)
 
 	// Auth
 	AuthenticateEmailPassword(email string, password string) (*models.Member, error)
 
-	MemberCirclePermissions(ctx context.Context, tl util.TimeLineSequenceNumber, roleID util.ID) (*models.MemberCirclePermissions, error)
+	MemberCirclePermissions(ctx context.Context, tl util.TimeLineNumber, roleID util.ID) (*models.MemberCirclePermissions, error)
 
-	RoleEvents(roleID util.ID, first int, start, after util.TimeLineSequenceNumber) ([]*models.RoleEvent, bool, error)
+	RoleEvents(roleID util.ID, first int, start, after util.TimeLineNumber) ([]*models.RoleEvent, bool, error)
 }
 
 type GenericSqlizer string
@@ -185,15 +186,15 @@ func tableColumns(table string, columns []string) []string {
 }
 
 // TODO(sgotti) check if tl === curTl to optimize the query
-func (s *DBService) timeLineCond(table string, tl util.TimeLineSequenceNumber) sq.Sqlizer {
-	if tl == s.curTl.SequenceNumber {
+func (s *DBService) timeLineCond(table string, tl util.TimeLineNumber) sq.Sqlizer {
+	if tl == s.curTl.Number() {
 		return sq.Eq{table + ".end_tl": nil}
 	}
 	return sq.And{sq.LtOrEq{table + ".start_tl": tl}, sq.Or{sq.GtOrEq{table + ".end_tl": tl}, sq.Eq{table + ".end_tl": nil}}}
 }
 
-func (s *DBService) lastTimeLineCond(table string, tl util.TimeLineSequenceNumber) sq.Sqlizer {
-	if tl == s.curTl.SequenceNumber {
+func (s *DBService) lastTimeLineCond(table string, tl util.TimeLineNumber) sq.Sqlizer {
+	if tl == s.curTl.Number() {
 		return sq.Eq{table + ".end_tl": nil}
 	}
 	return sq.And{sq.Eq{table + ".end_tl": nil}, sq.LtOrEq{table + ".start_tl": tl}}
@@ -252,7 +253,7 @@ var accountabilityEdges = []edgeClass{edgeClassRoleAccountability}
 var memberEdges = []edgeClass{edgeClassRoleMember, edgeClassCircleDirectMember, edgeClassMemberTension}
 var tensionEdges = []edgeClass{edgeClassMemberTension, edgeClassRoleTension}
 
-func (s *DBService) vertices(tl util.TimeLineSequenceNumber, vertexClass vertexClass, limit uint64, condition interface{}, orderBys []string) (interface{}, error) {
+func (s *DBService) vertices(tl util.TimeLineNumber, vertexClass vertexClass, limit uint64, condition interface{}, orderBys []string) (interface{}, error) {
 	if tl <= 0 {
 		panic(errors.Errorf("wrong tl sequence %d", tl))
 	}
@@ -325,7 +326,7 @@ func (s *DBService) vertices(tl util.TimeLineSequenceNumber, vertexClass vertexC
 	return res, err
 }
 
-func (s *DBService) connectedVertices(tl util.TimeLineSequenceNumber, vertexID []util.ID, ec edgeClass, direction edgeDirection, outputVertexClass vertexClass, condition interface{}, orderBys []string) (interface{}, error) {
+func (s *DBService) connectedVertices(tl util.TimeLineNumber, vertexID []util.ID, ec edgeClass, direction edgeDirection, outputVertexClass vertexClass, condition interface{}, orderBys []string) (interface{}, error) {
 	var sb sq.SelectBuilder
 	var vc vertexClass
 	var startEdgePoint, endEdgePoint string
@@ -440,7 +441,7 @@ func (s *DBService) connectedVertices(tl util.TimeLineSequenceNumber, vertexID [
 	return res, err
 }
 
-func (s *DBService) verticesFiltered(tl util.TimeLineSequenceNumber, vc vertexClass, ec edgeClass, direction edgeDirection, endEdgeID []util.ID, condition interface{}) (interface{}, error) {
+func (s *DBService) verticesFiltered(tl util.TimeLineNumber, vc vertexClass, ec edgeClass, direction edgeDirection, endEdgeID []util.ID, condition interface{}) (interface{}, error) {
 	var sb sq.SelectBuilder
 
 	if tl <= 0 {
@@ -516,7 +517,7 @@ func (s *DBService) verticesFiltered(tl util.TimeLineSequenceNumber, vc vertexCl
 	return res, err
 }
 
-func (s *DBService) CheckBrokenEdges(tl util.TimeLineSequenceNumber) error {
+func (s *DBService) CheckBrokenEdges(tl util.TimeLineNumber) error {
 	log.Debugf("CheckBrokenEdges tl: %d", tl)
 
 	if tl <= 0 {
@@ -593,7 +594,7 @@ func (s *DBService) CheckBrokenEdges(tl util.TimeLineSequenceNumber) error {
 }
 
 // insertVertex writes a new vertex, this low level function shuldn't be directly used.
-func (s *DBService) insertVertex(tl util.TimeLineSequenceNumber, vc vertexClass, id util.ID, vertex interface{}) error {
+func (s *DBService) insertVertex(tl util.TimeLineNumber, vc vertexClass, id util.ID, vertex interface{}) error {
 	switch vc {
 	case vertexClassRole:
 		return s.insertRole(tl, id, vertex.(*models.Role))
@@ -617,7 +618,7 @@ func (s *DBService) insertVertex(tl util.TimeLineSequenceNumber, vc vertexClass,
 // closeVertex closes a vertex setting its end timeline to endtl (should always
 // be the current operation timeline - 1)
 // This low level function shuldn't be directly used.
-func (s *DBService) closeVertex(endtl util.TimeLineSequenceNumber, vc vertexClass, id util.ID) error {
+func (s *DBService) closeVertex(endtl util.TimeLineNumber, vc vertexClass, id util.ID) error {
 	log.Debugf("closing vertex %s id: %d", vc, id)
 	q, args, err := sb.Update(vc.String()).Set("end_tl", endtl).Where(sq.Eq{"id": id}).Where(s.lastTimeLineCond(vc.String(), endtl)).ToSql()
 	if err != nil {
@@ -634,7 +635,7 @@ func (s *DBService) closeVertex(endtl util.TimeLineSequenceNumber, vc vertexClas
 }
 
 // newVertex adds a new vertex
-func (s *DBService) newVertex(tl util.TimeLineSequenceNumber, id util.ID, vc vertexClass, vertex interface{}) error {
+func (s *DBService) newVertex(tl util.TimeLineNumber, id util.ID, vc vertexClass, vertex interface{}) error {
 	if err := s.insertVertex(tl, vc, id, vertex); err != nil {
 		return err
 	}
@@ -642,7 +643,7 @@ func (s *DBService) newVertex(tl util.TimeLineSequenceNumber, id util.ID, vc ver
 	return nil
 }
 
-func (s *DBService) updateVertex(tl util.TimeLineSequenceNumber, vc vertexClass, id util.ID, vertex interface{}) error {
+func (s *DBService) updateVertex(tl util.TimeLineNumber, vc vertexClass, id util.ID, vertex interface{}) error {
 	if err := s.closeVertex(tl-1, vc, id); err != nil {
 		return err
 	}
@@ -656,7 +657,7 @@ func (s *DBService) updateVertex(tl util.TimeLineSequenceNumber, vc vertexClass,
 // the connected edges
 // If a cascading close (delete of connected vertices) is needed this should be
 // implemented in the upper layer
-func (s *DBService) deleteVertex(tl util.TimeLineSequenceNumber, vc vertexClass, id util.ID) error {
+func (s *DBService) deleteVertex(tl util.TimeLineNumber, vc vertexClass, id util.ID) error {
 	endtl := tl - 1
 	if err := s.closeVertex(endtl, vc, id); err != nil {
 		return err
@@ -689,7 +690,7 @@ func (s *DBService) deleteVertex(tl util.TimeLineSequenceNumber, vc vertexClass,
 
 // closeEdge closes the edge at the provided timeline
 // This low level function shuldn't be directly used.
-func (s *DBService) closeEdge(endtl util.TimeLineSequenceNumber, ec edgeClass, x, y util.ID) error {
+func (s *DBService) closeEdge(endtl util.TimeLineNumber, ec edgeClass, x, y util.ID) error {
 	log.Debugf("closing edge %s x: %d, y: %d", ec, x, y)
 	q, args, err := sb.Update(ec.String()).Set("end_tl", endtl).Where(sq.And{sq.Eq{"x": x}, sq.Eq{"y": y}}).Where(s.lastTimeLineCond(ec.String(), endtl)).ToSql()
 	if err != nil {
@@ -707,11 +708,11 @@ func (s *DBService) closeEdge(endtl util.TimeLineSequenceNumber, ec edgeClass, x
 
 // deleteEdge deletes the edge. The provided timeline is the timeline of the
 // current change. Internally it'll call closeEdge with tl-1
-func (s *DBService) deleteEdge(tl util.TimeLineSequenceNumber, ec edgeClass, x, y util.ID) error {
+func (s *DBService) deleteEdge(tl util.TimeLineNumber, ec edgeClass, x, y util.ID) error {
 	return s.closeEdge(tl-1, ec, x, y)
 }
 
-func (s *DBService) addEdge(tl util.TimeLineSequenceNumber, ec edgeClass, x, y util.ID, values ...interface{}) error {
+func (s *DBService) addEdge(tl util.TimeLineNumber, ec edgeClass, x, y util.ID, values ...interface{}) error {
 	columns := edgeColumns
 
 	switch ec {
@@ -735,7 +736,7 @@ func (s *DBService) addEdge(tl util.TimeLineSequenceNumber, ec edgeClass, x, y u
 
 func scanTimeLine(rows *sql.Rows) (*util.TimeLine, error) {
 	tl := util.TimeLine{}
-	if err := rows.Scan(&tl.SequenceNumber, &tl.Timestamp); err != nil {
+	if err := rows.Scan(&tl.Timestamp); err != nil {
 		return nil, errors.Wrap(err, "failed to scan rows")
 	}
 
@@ -1162,7 +1163,7 @@ func scanRoleEvents(rows *sql.Rows) ([]*models.RoleEvent, error) {
 	return roleEvents, nil
 }
 
-func (s *DBService) insertRole(tl util.TimeLineSequenceNumber, id util.ID, role *models.Role) error {
+func (s *DBService) insertRole(tl util.TimeLineNumber, id util.ID, role *models.Role) error {
 	q, args, err := roleInsert.Values(id, tl, nil, role.RoleType, role.Depth, role.Name, role.Purpose).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
@@ -1177,7 +1178,7 @@ func (s *DBService) insertRole(tl util.TimeLineSequenceNumber, id util.ID, role 
 	return nil
 }
 
-func (s *DBService) insertDomain(tl util.TimeLineSequenceNumber, id util.ID, domain *models.Domain) error {
+func (s *DBService) insertDomain(tl util.TimeLineNumber, id util.ID, domain *models.Domain) error {
 	q, args, err := domainInsert.Values(id, tl, nil, domain.Description).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
@@ -1192,7 +1193,7 @@ func (s *DBService) insertDomain(tl util.TimeLineSequenceNumber, id util.ID, dom
 	return nil
 }
 
-func (s *DBService) insertAccountability(tl util.TimeLineSequenceNumber, id util.ID, accountability *models.Accountability) error {
+func (s *DBService) insertAccountability(tl util.TimeLineNumber, id util.ID, accountability *models.Accountability) error {
 	q, args, err := accountabilityInsert.Values(id, tl, nil, accountability.Description).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
@@ -1207,7 +1208,7 @@ func (s *DBService) insertAccountability(tl util.TimeLineSequenceNumber, id util
 	return nil
 }
 
-func (s *DBService) insertRoleAdditionalContent(tl util.TimeLineSequenceNumber, id util.ID, roleAdditionalContent *models.RoleAdditionalContent) error {
+func (s *DBService) insertRoleAdditionalContent(tl util.TimeLineNumber, id util.ID, roleAdditionalContent *models.RoleAdditionalContent) error {
 	q, args, err := roleAdditionalContentInsert.Values(id, tl, nil, roleAdditionalContent.Content).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
@@ -1222,7 +1223,7 @@ func (s *DBService) insertRoleAdditionalContent(tl util.TimeLineSequenceNumber, 
 	return nil
 }
 
-func (s *DBService) insertMember(tl util.TimeLineSequenceNumber, id util.ID, member *models.Member) error {
+func (s *DBService) insertMember(tl util.TimeLineNumber, id util.ID, member *models.Member) error {
 	q, args, err := memberInsert.Values(id, tl, nil, member.IsAdmin, member.UserName, member.FullName, member.Email).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
@@ -1237,7 +1238,7 @@ func (s *DBService) insertMember(tl util.TimeLineSequenceNumber, id util.ID, mem
 	return nil
 }
 
-func (s *DBService) insertMemberAvatar(tl util.TimeLineSequenceNumber, id util.ID, avatar *models.Avatar) error {
+func (s *DBService) insertMemberAvatar(tl util.TimeLineNumber, id util.ID, avatar *models.Avatar) error {
 	q, args, err := memberAvatarInsert.Values(id, tl, nil, avatar.Image).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
@@ -1252,7 +1253,7 @@ func (s *DBService) insertMemberAvatar(tl util.TimeLineSequenceNumber, id util.I
 	return nil
 }
 
-func (s *DBService) insertTension(tl util.TimeLineSequenceNumber, id util.ID, tension *models.Tension) error {
+func (s *DBService) insertTension(tl util.TimeLineNumber, id util.ID, tension *models.Tension) error {
 	q, args, err := tensionInsert.Values(id, tl, nil, tension.Title, tension.Description, tension.Closed, tension.CloseReason).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
@@ -1309,6 +1310,9 @@ func NewDBService(tx *db.Tx) (*DBService, error) {
 	if err != nil {
 		return nil, err
 	}
+	if curTl == nil {
+		curTl = &util.TimeLine{}
+	}
 
 	s.curTl = curTl
 
@@ -1324,11 +1328,11 @@ func (s *DBService) curTimeLineFromDB() (*util.TimeLine, error) {
 	var tl util.TimeLine
 
 	err := s.tx.Do(func(tx *db.WrappedTx) error {
-		if err := tx.QueryRow("select * from timeline order by sequencenumber desc limit 1").Scan(&tl.SequenceNumber, &tl.Timestamp); err != nil && err != sql.ErrNoRows {
-			return err
-		}
-		return nil
+		return tx.QueryRow("select timestamp from timeline order by timestamp desc limit 1").Scan(&tl.Timestamp)
 	})
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 
 	return &tl, err
 }
@@ -1337,36 +1341,61 @@ func (s *DBService) CurTimeLine() *util.TimeLine {
 	s.curTlLock.Lock()
 	defer s.curTlLock.Unlock()
 
+	if s.curTl == nil {
+		return &util.TimeLine{}
+	}
+
 	// take a copy of curTl
 	c := *s.curTl
+
+	//log.Infof("curTl: %s", c)
 	return &c
 }
 
-func (s *DBService) TimeLine(sn util.TimeLineSequenceNumber) (*util.TimeLine, error) {
+func (s *DBService) TimeLine(sn util.TimeLineNumber) (*util.TimeLine, error) {
 	var tl util.TimeLine
 
 	err := s.tx.Do(func(tx *db.WrappedTx) error {
-		if err := tx.QueryRow("select * from timeline where sequencenumber = $1", sn).Scan(&tl.SequenceNumber, &tl.Timestamp); err != nil && err != sql.ErrNoRows {
+		if err := tx.QueryRow("select timestamp from timeline where timestamp = $1", time.Unix(0, int64(sn))).Scan(&tl.Timestamp); err != nil {
 			return err
 		}
 		return nil
 	})
-	if tl.SequenceNumber == 0 {
+	if err == sql.ErrNoRows {
 		return nil, errors.Errorf("timeline %d doesn't exists", sn)
 	}
 
 	return &tl, err
 }
 
-func (s *DBService) TimeLines(sn util.TimeLineSequenceNumber, first int) ([]*util.TimeLine, bool, error) {
+func (s *DBService) TimeLineForGroupID(groupID util.ID) (*util.TimeLine, error) {
+	var tl util.TimeLine
+
+	err := s.tx.Do(func(tx *db.WrappedTx) error {
+		return tx.QueryRow("select timestamp from timeline where groupid = $1", groupID).Scan(&tl.Timestamp)
+	})
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+
+	return &tl, err
+}
+
+func (s *DBService) TimeLines(sn util.TimeLineNumber, limit int, after bool) ([]*util.TimeLine, bool, error) {
 	var tls []*util.TimeLine
-	if first == 0 {
-		first = MaxFetchSize
+	if limit <= 0 {
+		limit = MaxFetchSize
 	}
 
 	err := s.tx.Do(func(tx *db.WrappedTx) error {
-		// ask for first + 1 rows to know if there's more data
-		rows, err := tx.Query("select * from timeline where sequencenumber > $1 order by sequencenumber asc limit $2", sn, first+1)
+		var q string
+		// ask for limit + 1 rows to know if there's more data
+		if after {
+			q = "select timestamp from timeline where timestamp > $1 order by timestamp asc limit $2"
+		} else {
+			q = "select timestamp from timeline where timestamp < $1 order by timestamp desc limit $2"
+		}
+		rows, err := tx.Query(q, time.Unix(0, int64(sn)), limit+1)
 		if err != nil {
 			return err
 		}
@@ -1381,26 +1410,26 @@ func (s *DBService) TimeLines(sn util.TimeLineSequenceNumber, first int) ([]*uti
 	}
 
 	size := len(tls)
-	if len(tls) > first {
-		size = first
+	if len(tls) > limit {
+		size = limit
 	}
-	return tls[:size], len(tls) > first, err
+	return tls[:size], len(tls) > limit, err
 }
 
 func (s *DBService) TimeLineAtTimeStamp(ts time.Time) (*util.TimeLine, error) {
 	var tl util.TimeLine
 
 	err := s.tx.Do(func(tx *db.WrappedTx) error {
-		if err := tx.QueryRow("select * from timeline where timestamp >= $1 order by sequencenumber asc limit 1", ts).Scan(&tl.SequenceNumber, &tl.Timestamp); err != nil && err != sql.ErrNoRows {
-			return err
-		}
-		return nil
+		return tx.QueryRow("select timestamp from timeline where timestamp >= $1 order by timestamp asc limit 1", ts).Scan(&tl.Timestamp)
 	})
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
 
 	return &tl, err
 }
 
-func (s *DBService) RootRoleInternal(tl util.TimeLineSequenceNumber) (*models.Role, error) {
+func (s *DBService) RootRoleInternal(tl util.TimeLineNumber) (*models.Role, error) {
 	vs, err := s.vertices(tl, vertexClassRole, 0, sq.Eq{"role.depth": 0}, nil)
 	if err != nil {
 		return nil, err
@@ -1416,11 +1445,11 @@ func (s *DBService) RootRoleInternal(tl util.TimeLineSequenceNumber) (*models.Ro
 	return roles[0], nil
 }
 
-func (s *DBService) RootRole(ctx context.Context, tl util.TimeLineSequenceNumber) (*models.Role, error) {
+func (s *DBService) RootRole(ctx context.Context, tl util.TimeLineNumber) (*models.Role, error) {
 	return s.RootRoleInternal(tl)
 }
 
-func (s *DBService) RoleInternal(tl util.TimeLineSequenceNumber, id util.ID) (*models.Role, error) {
+func (s *DBService) RoleInternal(tl util.TimeLineNumber, id util.ID) (*models.Role, error) {
 	var err error
 
 	vs, err := s.vertices(tl, vertexClassRole, 0, sq.Eq{"role.id": id}, nil)
@@ -1435,11 +1464,11 @@ func (s *DBService) RoleInternal(tl util.TimeLineSequenceNumber, id util.ID) (*m
 	return roles[0], nil
 }
 
-func (s *DBService) Role(ctx context.Context, tl util.TimeLineSequenceNumber, id util.ID) (*models.Role, error) {
+func (s *DBService) Role(ctx context.Context, tl util.TimeLineNumber, id util.ID) (*models.Role, error) {
 	return s.RoleInternal(tl, id)
 }
 
-func (s *DBService) RolesInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) ([]*models.Role, error) {
+func (s *DBService) RolesInternal(tl util.TimeLineNumber, rolesIDs []util.ID) ([]*models.Role, error) {
 	var condition interface{}
 	if len(rolesIDs) > 0 {
 		condition = sq.Eq{"role.id": rolesIDs}
@@ -1453,7 +1482,7 @@ func (s *DBService) RolesInternal(tl util.TimeLineSequenceNumber, rolesIDs []uti
 	return roles, nil
 }
 
-func (s *DBService) Roles(ctx context.Context, tl util.TimeLineSequenceNumber, rolesIDs []util.ID) ([]*models.Role, error) {
+func (s *DBService) Roles(ctx context.Context, tl util.TimeLineNumber, rolesIDs []util.ID) ([]*models.Role, error) {
 	roles, err := s.RolesInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -1461,7 +1490,7 @@ func (s *DBService) Roles(ctx context.Context, tl util.TimeLineSequenceNumber, r
 	return roles, nil
 }
 
-func (s *DBService) ChildRolesInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID, orderBys []string) (map[util.ID][]*models.Role, error) {
+func (s *DBService) ChildRolesInternal(tl util.TimeLineNumber, rolesIDs []util.ID, orderBys []string) (map[util.ID][]*models.Role, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassRoleRole, edgeDirectionOut, "", nil, orderBys)
 	if err != nil {
 		return nil, err
@@ -1470,7 +1499,7 @@ func (s *DBService) ChildRolesInternal(tl util.TimeLineSequenceNumber, rolesIDs 
 	return roles, nil
 }
 
-func (s *DBService) ChildRoles(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Role, error) {
+func (s *DBService) ChildRoles(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Role, error) {
 	roles, err := s.ChildRolesInternal(tl, rolesIDs, []string{"role.name"})
 	if err != nil {
 		return nil, err
@@ -1478,7 +1507,7 @@ func (s *DBService) ChildRoles(tl util.TimeLineSequenceNumber, rolesIDs []util.I
 	return roles, nil
 }
 
-func (s *DBService) RoleEventsByTypeInternal(roleID util.ID, tl util.TimeLineSequenceNumber, eventType models.RoleEventType) ([]*models.RoleEvent, error) {
+func (s *DBService) RoleEventsByTypeInternal(roleID util.ID, tl util.TimeLineNumber, eventType models.RoleEventType) ([]*models.RoleEvent, error) {
 
 	sb := roleEventSelect.Where(sq.Eq{"roleid": roleID, "timeline": tl, "eventtype": string(eventType)})
 
@@ -1503,11 +1532,11 @@ func (s *DBService) RoleEventsByTypeInternal(roleID util.ID, tl util.TimeLineSeq
 	return events, nil
 }
 
-func (s *DBService) RoleEventsByType(roleID util.ID, tl util.TimeLineSequenceNumber, eventType models.RoleEventType) ([]*models.RoleEvent, error) {
+func (s *DBService) RoleEventsByType(roleID util.ID, tl util.TimeLineNumber, eventType models.RoleEventType) ([]*models.RoleEvent, error) {
 	return s.RoleEventsByTypeInternal(roleID, tl, eventType)
 }
 
-func (s *DBService) RoleEventsInternal(roleID util.ID, first int, start, after util.TimeLineSequenceNumber) ([]*models.RoleEvent, error) {
+func (s *DBService) RoleEventsInternal(roleID util.ID, first int, start, after util.TimeLineNumber) ([]*models.RoleEvent, error) {
 	var condition sq.Sqlizer
 
 	if start != 0 {
@@ -1548,7 +1577,7 @@ func (s *DBService) RoleEventsInternal(roleID util.ID, first int, start, after u
 
 	return events, nil
 }
-func (s *DBService) RoleEvents(roleID util.ID, first int, start, after util.TimeLineSequenceNumber) ([]*models.RoleEvent, bool, error) {
+func (s *DBService) RoleEvents(roleID util.ID, first int, start, after util.TimeLineNumber) ([]*models.RoleEvent, bool, error) {
 	if first == 0 {
 		first = MaxFetchSize
 	}
@@ -1566,7 +1595,7 @@ func (s *DBService) RoleEvents(roleID util.ID, first int, start, after util.Time
 	return roleEvents[:size], len(roleEvents) > first, nil
 }
 
-func (s *DBService) MemberInternal(tl util.TimeLineSequenceNumber, id util.ID) (*models.Member, error) {
+func (s *DBService) MemberInternal(tl util.TimeLineNumber, id util.ID) (*models.Member, error) {
 	vs, err := s.vertices(tl, vertexClassMember, 0, sq.Eq{"member.id": id}, nil)
 	if err != nil {
 		return nil, err
@@ -1578,11 +1607,11 @@ func (s *DBService) MemberInternal(tl util.TimeLineSequenceNumber, id util.ID) (
 	return members[0], nil
 }
 
-func (s *DBService) Member(ctx context.Context, tl util.TimeLineSequenceNumber, memberID util.ID) (*models.Member, error) {
+func (s *DBService) Member(ctx context.Context, tl util.TimeLineNumber, memberID util.ID) (*models.Member, error) {
 	return s.MemberInternal(tl, memberID)
 }
 
-func (s *DBService) MemberAvatarInternal(tl util.TimeLineSequenceNumber, id util.ID) (*models.Avatar, error) {
+func (s *DBService) MemberAvatarInternal(tl util.TimeLineNumber, id util.ID) (*models.Avatar, error) {
 	vs, err := s.vertices(tl, vertexClassMemberAvatar, 0, sq.Eq{"memberavatar.id": id}, nil)
 	if err != nil {
 		return nil, err
@@ -1626,14 +1655,14 @@ func (s *DBService) MemberByMatchUIDInternal(matchUID string) (*models.Member, e
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
-	return s.MemberInternal(s.CurTimeLine().SequenceNumber, memberID)
+	return s.MemberInternal(s.CurTimeLine().Number(), memberID)
 }
 
 func (s *DBService) MemberByMatchUID(ctx context.Context, matchUID string) (*models.Member, error) {
 	return s.MemberByMatchUIDInternal(matchUID)
 }
 
-func (s *DBService) MemberByUserNameInternal(tl util.TimeLineSequenceNumber, userName string) (*models.Member, error) {
+func (s *DBService) MemberByUserNameInternal(tl util.TimeLineNumber, userName string) (*models.Member, error) {
 	vs, err := s.vertices(tl, vertexClassMember, 0, sq.Eq{"member.username": userName}, nil)
 	if err != nil {
 		return nil, err
@@ -1645,11 +1674,11 @@ func (s *DBService) MemberByUserNameInternal(tl util.TimeLineSequenceNumber, use
 	return members[0], nil
 }
 
-func (s *DBService) MemberByUserName(ctx context.Context, tl util.TimeLineSequenceNumber, userName string) (*models.Member, error) {
+func (s *DBService) MemberByUserName(ctx context.Context, tl util.TimeLineNumber, userName string) (*models.Member, error) {
 	return s.MemberByUserNameInternal(tl, userName)
 }
 
-func (s *DBService) MemberByEmailInternal(tl util.TimeLineSequenceNumber, email string) (*models.Member, error) {
+func (s *DBService) MemberByEmailInternal(tl util.TimeLineNumber, email string) (*models.Member, error) {
 	vs, err := s.vertices(tl, vertexClassMember, 0, sq.Eq{"member.email": email}, nil)
 	if err != nil {
 		return nil, err
@@ -1661,11 +1690,11 @@ func (s *DBService) MemberByEmailInternal(tl util.TimeLineSequenceNumber, email 
 	return members[0], nil
 }
 
-func (s *DBService) MemberByEmail(ctx context.Context, tl util.TimeLineSequenceNumber, email string) (*models.Member, error) {
+func (s *DBService) MemberByEmail(ctx context.Context, tl util.TimeLineNumber, email string) (*models.Member, error) {
 	return s.MemberByEmailInternal(tl, email)
 }
 
-func (s *DBService) MembersByIDsInternal(tl util.TimeLineSequenceNumber, membersIDs []util.ID) ([]*models.Member, error) {
+func (s *DBService) MembersByIDsInternal(tl util.TimeLineNumber, membersIDs []util.ID) ([]*models.Member, error) {
 	var condition interface{}
 	if len(membersIDs) > 0 {
 		condition = sq.Eq{"member.id": membersIDs}
@@ -1679,7 +1708,7 @@ func (s *DBService) MembersByIDsInternal(tl util.TimeLineSequenceNumber, members
 	return members, nil
 }
 
-func (s *DBService) MembersByIDs(ctx context.Context, tl util.TimeLineSequenceNumber, membersIDs []util.ID) ([]*models.Member, error) {
+func (s *DBService) MembersByIDs(ctx context.Context, tl util.TimeLineNumber, membersIDs []util.ID) ([]*models.Member, error) {
 	members, err := s.MembersByIDsInternal(tl, membersIDs)
 	if err != nil {
 		return nil, err
@@ -1687,7 +1716,7 @@ func (s *DBService) MembersByIDs(ctx context.Context, tl util.TimeLineSequenceNu
 	return members, nil
 }
 
-func (s *DBService) MembersInternal(tl util.TimeLineSequenceNumber, searchString string, first int, after *string) ([]*models.Member, error) {
+func (s *DBService) MembersInternal(tl util.TimeLineNumber, searchString string, first int, after *string) ([]*models.Member, error) {
 	var condition sq.Sqlizer
 	if after != nil {
 		condition = sq.Gt{"member.fullname": after}
@@ -1710,7 +1739,7 @@ func (s *DBService) MembersInternal(tl util.TimeLineSequenceNumber, searchString
 	return members, nil
 }
 
-func (s *DBService) Members(ctx context.Context, tl util.TimeLineSequenceNumber, searchString string, first int, after *string) ([]*models.Member, bool, error) {
+func (s *DBService) Members(ctx context.Context, tl util.TimeLineNumber, searchString string, first int, after *string) ([]*models.Member, bool, error) {
 	if first == 0 {
 		first = MaxFetchSize
 	}
@@ -1728,7 +1757,7 @@ func (s *DBService) Members(ctx context.Context, tl util.TimeLineSequenceNumber,
 	return members[:size], len(members) > first, nil
 }
 
-func (s *DBService) DirectMemberCirclesInternal(tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.Role, error) {
+func (s *DBService) DirectMemberCirclesInternal(tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.Role, error) {
 	vs, err := s.connectedVertices(tl, membersIDs, edgeClassCircleDirectMember, edgeDirectionOut, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -1736,7 +1765,7 @@ func (s *DBService) DirectMemberCirclesInternal(tl util.TimeLineSequenceNumber, 
 	return vs.(map[util.ID][]*models.Role), nil
 }
 
-func (s *DBService) MemberCircleEdgesInternal(tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberCircleEdge, error) {
+func (s *DBService) MemberCircleEdgesInternal(tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberCircleEdge, error) {
 	memberCircleEdges := map[util.ID][]*models.MemberCircleEdge{}
 
 	memberCircleEdgesMap := map[util.ID]map[util.ID]*models.MemberCircleEdge{}
@@ -1853,7 +1882,7 @@ func (s *DBService) MemberCircleEdgesInternal(tl util.TimeLineSequenceNumber, me
 	return memberCircleEdges, nil
 }
 
-func (s *DBService) MemberCircleEdges(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.MemberCircleEdge, error) {
+func (s *DBService) MemberCircleEdges(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.MemberCircleEdge, error) {
 	memberCircleEdges, err := s.MemberCircleEdgesInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -1862,7 +1891,7 @@ func (s *DBService) MemberCircleEdges(tl util.TimeLineSequenceNumber, rolesIDs [
 	return memberCircleEdges, nil
 }
 
-func (s *DBService) MemberRoleEdgesInternal(tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberRoleEdge, error) {
+func (s *DBService) MemberRoleEdgesInternal(tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberRoleEdge, error) {
 	vs, err := s.connectedVertices(tl, membersIDs, edgeClassRoleMember, edgeDirectionOut, vertexClassRoleMemberEdge, nil, nil)
 	if err != nil {
 		return nil, err
@@ -1871,7 +1900,7 @@ func (s *DBService) MemberRoleEdgesInternal(tl util.TimeLineSequenceNumber, memb
 	return vs.(map[util.ID][]*models.MemberRoleEdge), nil
 }
 
-func (s *DBService) MemberRoleEdges(tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberRoleEdge, error) {
+func (s *DBService) MemberRoleEdges(tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.MemberRoleEdge, error) {
 	memberRoleEdgesGroups, err := s.MemberRoleEdgesInternal(tl, membersIDs)
 	if err != nil {
 		return nil, err
@@ -1879,7 +1908,7 @@ func (s *DBService) MemberRoleEdges(tl util.TimeLineSequenceNumber, membersIDs [
 	return memberRoleEdgesGroups, nil
 }
 
-func (s *DBService) TensionInternal(tl util.TimeLineSequenceNumber, tensionID util.ID) (*models.Tension, error) {
+func (s *DBService) TensionInternal(tl util.TimeLineNumber, tensionID util.ID) (*models.Tension, error) {
 	vs, err := s.vertices(tl, vertexClassTension, 0, sq.Eq{"tension.id": tensionID}, nil)
 	if err != nil {
 		return nil, err
@@ -1891,7 +1920,7 @@ func (s *DBService) TensionInternal(tl util.TimeLineSequenceNumber, tensionID ut
 	return tensions[0], nil
 }
 
-func (s *DBService) Tension(ctx context.Context, tl util.TimeLineSequenceNumber, tensionID util.ID) (*models.Tension, error) {
+func (s *DBService) Tension(ctx context.Context, tl util.TimeLineNumber, tensionID util.ID) (*models.Tension, error) {
 	tension, err := s.TensionInternal(tl, tensionID)
 	if err != nil {
 		return nil, err
@@ -1899,7 +1928,7 @@ func (s *DBService) Tension(ctx context.Context, tl util.TimeLineSequenceNumber,
 	return tension, nil
 }
 
-func (s *DBService) MemberTensionsInternal(tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.Tension, error) {
+func (s *DBService) MemberTensionsInternal(tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.Tension, error) {
 	vs, err := s.connectedVertices(tl, membersIDs, edgeClassMemberTension, edgeDirectionIn, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -1907,7 +1936,7 @@ func (s *DBService) MemberTensionsInternal(tl util.TimeLineSequenceNumber, membe
 	return vs.(map[util.ID][]*models.Tension), nil
 }
 
-func (s *DBService) MemberTensions(ctx context.Context, tl util.TimeLineSequenceNumber, membersIDs []util.ID) (map[util.ID][]*models.Tension, error) {
+func (s *DBService) MemberTensions(ctx context.Context, tl util.TimeLineNumber, membersIDs []util.ID) (map[util.ID][]*models.Tension, error) {
 	// Only the member itself can see its tensions
 	member, err := s.CallingMemberInternal(ctx, tl)
 	if err != nil {
@@ -1929,7 +1958,7 @@ func (s *DBService) MemberTensions(ctx context.Context, tl util.TimeLineSequence
 	return tensionsGroups, nil
 }
 
-func (s *DBService) TensionMemberInternal(tl util.TimeLineSequenceNumber, tensionsIDs []util.ID) (map[util.ID]*models.Member, error) {
+func (s *DBService) TensionMemberInternal(tl util.TimeLineNumber, tensionsIDs []util.ID) (map[util.ID]*models.Member, error) {
 	vs, err := s.connectedVertices(tl, tensionsIDs, edgeClassMemberTension, edgeDirectionOut, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -1944,7 +1973,7 @@ func (s *DBService) TensionMemberInternal(tl util.TimeLineSequenceNumber, tensio
 	return mg, nil
 }
 
-func (s *DBService) TensionMember(tl util.TimeLineSequenceNumber, tensionsIDs []util.ID) (map[util.ID]*models.Member, error) {
+func (s *DBService) TensionMember(tl util.TimeLineNumber, tensionsIDs []util.ID) (map[util.ID]*models.Member, error) {
 	memberGroups, err := s.TensionMemberInternal(tl, tensionsIDs)
 	if err != nil {
 		return nil, err
@@ -1953,7 +1982,7 @@ func (s *DBService) TensionMember(tl util.TimeLineSequenceNumber, tensionsIDs []
 	return memberGroups, nil
 }
 
-func (s *DBService) RoleTensionsInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Tension, error) {
+func (s *DBService) RoleTensionsInternal(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Tension, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassRoleTension, edgeDirectionIn, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -1961,7 +1990,7 @@ func (s *DBService) RoleTensionsInternal(tl util.TimeLineSequenceNumber, rolesID
 	return vs.(map[util.ID][]*models.Tension), nil
 }
 
-func (s *DBService) RoleTensions(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Tension, error) {
+func (s *DBService) RoleTensions(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Tension, error) {
 	tensionsGroups, err := s.RoleTensionsInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -1970,7 +1999,7 @@ func (s *DBService) RoleTensions(tl util.TimeLineSequenceNumber, rolesIDs []util
 	return tensionsGroups, nil
 }
 
-func (s *DBService) TensionRoleInternal(tl util.TimeLineSequenceNumber, tensionsIDs []util.ID) (map[util.ID]*models.Role, error) {
+func (s *DBService) TensionRoleInternal(tl util.TimeLineNumber, tensionsIDs []util.ID) (map[util.ID]*models.Role, error) {
 	vs, err := s.connectedVertices(tl, tensionsIDs, edgeClassRoleTension, edgeDirectionOut, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -1985,7 +2014,7 @@ func (s *DBService) TensionRoleInternal(tl util.TimeLineSequenceNumber, tensions
 	return mg, nil
 }
 
-func (s *DBService) TensionRole(tl util.TimeLineSequenceNumber, tensionsIDs []util.ID) (map[util.ID]*models.Role, error) {
+func (s *DBService) TensionRole(tl util.TimeLineNumber, tensionsIDs []util.ID) (map[util.ID]*models.Role, error) {
 	roleGroups, err := s.TensionRoleInternal(tl, tensionsIDs)
 	if err != nil {
 		return nil, err
@@ -1994,7 +2023,7 @@ func (s *DBService) TensionRole(tl util.TimeLineSequenceNumber, tensionsIDs []ut
 	return roleGroups, nil
 }
 
-func (s *DBService) RoleParentInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID]*models.Role, error) {
+func (s *DBService) RoleParentInternal(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID]*models.Role, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassRoleRole, edgeDirectionIn, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -2009,7 +2038,7 @@ func (s *DBService) RoleParentInternal(tl util.TimeLineSequenceNumber, rolesIDs 
 	return rg, nil
 }
 
-func (s *DBService) RoleParent(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID]*models.Role, error) {
+func (s *DBService) RoleParent(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID]*models.Role, error) {
 	roleGroups, err := s.RoleParentInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -2018,7 +2047,7 @@ func (s *DBService) RoleParent(tl util.TimeLineSequenceNumber, rolesIDs []util.I
 	return roleGroups, nil
 }
 
-func (s *DBService) RoleParents(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Role, error) {
+func (s *DBService) RoleParents(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Role, error) {
 	roleParentsGroups := map[util.ID][]*models.Role{}
 	// TODO(sgotti) use sql WITH RECURSIVE where supported? (postgres)
 	roleParentGroups, err := s.RoleParentInternal(tl, rolesIDs)
@@ -2069,7 +2098,7 @@ func (s *DBService) RoleParents(tl util.TimeLineSequenceNumber, rolesIDs []util.
 	return roleParentsGroups, nil
 }
 
-func (s *DBService) CircleCoreRoleInternal(tl util.TimeLineSequenceNumber, roleType models.RoleType, rolesIDs []util.ID) (map[util.ID]*models.Role, error) {
+func (s *DBService) CircleCoreRoleInternal(tl util.TimeLineNumber, roleType models.RoleType, rolesIDs []util.ID) (map[util.ID]*models.Role, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassRoleRole, edgeDirectionOut, "", sq.Eq{"role.roletype": roleType}, nil)
 	if err != nil {
 		return nil, err
@@ -2084,7 +2113,7 @@ func (s *DBService) CircleCoreRoleInternal(tl util.TimeLineSequenceNumber, roleT
 	return rg, nil
 }
 
-func (s *DBService) CircleDirectMembersInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Member, error) {
+func (s *DBService) CircleDirectMembersInternal(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Member, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassCircleDirectMember, edgeDirectionIn, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -2093,7 +2122,7 @@ func (s *DBService) CircleDirectMembersInternal(tl util.TimeLineSequenceNumber, 
 	return vs.(map[util.ID][]*models.Member), nil
 }
 
-func (s *DBService) CircleMemberEdgesInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.CircleMemberEdge, error) {
+func (s *DBService) CircleMemberEdgesInternal(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.CircleMemberEdge, error) {
 	circleMemberEdges := map[util.ID][]*models.CircleMemberEdge{}
 
 	circleMemberEdgesMap := map[util.ID]map[util.ID]*models.CircleMemberEdge{}
@@ -2212,7 +2241,7 @@ func (s *DBService) CircleMemberEdgesInternal(tl util.TimeLineSequenceNumber, ro
 	return circleMemberEdges, nil
 }
 
-func (s *DBService) CircleMemberEdges(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.CircleMemberEdge, error) {
+func (s *DBService) CircleMemberEdges(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.CircleMemberEdge, error) {
 	circleMemberEdges, err := s.CircleMemberEdgesInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -2221,7 +2250,7 @@ func (s *DBService) CircleMemberEdges(tl util.TimeLineSequenceNumber, rolesIDs [
 	return circleMemberEdges, nil
 }
 
-func (s *DBService) RoleMemberEdgesInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID, orderBys []string) (map[util.ID][]*models.RoleMemberEdge, error) {
+func (s *DBService) RoleMemberEdgesInternal(tl util.TimeLineNumber, rolesIDs []util.ID, orderBys []string) (map[util.ID][]*models.RoleMemberEdge, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassRoleMember, edgeDirectionIn, vertexClassRoleMemberEdge, nil, nil)
 	if err != nil {
 		return nil, err
@@ -2230,7 +2259,7 @@ func (s *DBService) RoleMemberEdgesInternal(tl util.TimeLineSequenceNumber, role
 	return vs.(map[util.ID][]*models.RoleMemberEdge), nil
 }
 
-func (s *DBService) RoleMemberEdges(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.RoleMemberEdge, error) {
+func (s *DBService) RoleMemberEdges(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.RoleMemberEdge, error) {
 	roleMemberEdgesGroups, err := s.RoleMemberEdgesInternal(tl, rolesIDs, nil)
 	if err != nil {
 		return nil, err
@@ -2239,7 +2268,7 @@ func (s *DBService) RoleMemberEdges(tl util.TimeLineSequenceNumber, rolesIDs []u
 	return roleMemberEdgesGroups, nil
 }
 
-func (s *DBService) RoleDomainsInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Domain, error) {
+func (s *DBService) RoleDomainsInternal(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Domain, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassRoleDomain, edgeDirectionIn, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -2248,7 +2277,7 @@ func (s *DBService) RoleDomainsInternal(tl util.TimeLineSequenceNumber, rolesIDs
 	return vs.(map[util.ID][]*models.Domain), nil
 }
 
-func (s *DBService) RoleDomains(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Domain, error) {
+func (s *DBService) RoleDomains(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Domain, error) {
 	roleDomains, err := s.RoleDomainsInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -2256,7 +2285,7 @@ func (s *DBService) RoleDomains(tl util.TimeLineSequenceNumber, rolesIDs []util.
 	return roleDomains, nil
 }
 
-func (s *DBService) RoleAccountabilitiesInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Accountability, error) {
+func (s *DBService) RoleAccountabilitiesInternal(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Accountability, error) {
 	vs, err := s.connectedVertices(tl, rolesIDs, edgeClassRoleAccountability, edgeDirectionIn, "", nil, nil)
 	if err != nil {
 		return nil, err
@@ -2265,7 +2294,7 @@ func (s *DBService) RoleAccountabilitiesInternal(tl util.TimeLineSequenceNumber,
 	return vs.(map[util.ID][]*models.Accountability), nil
 }
 
-func (s *DBService) RoleAccountabilities(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID][]*models.Accountability, error) {
+func (s *DBService) RoleAccountabilities(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID][]*models.Accountability, error) {
 	roleAccountabilities, err := s.RoleAccountabilitiesInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -2273,7 +2302,7 @@ func (s *DBService) RoleAccountabilities(tl util.TimeLineSequenceNumber, rolesID
 	return roleAccountabilities, nil
 }
 
-func (s *DBService) RolesAdditionalContentInternal(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) ([]*models.RoleAdditionalContent, error) {
+func (s *DBService) RolesAdditionalContentInternal(tl util.TimeLineNumber, rolesIDs []util.ID) ([]*models.RoleAdditionalContent, error) {
 	condition := sq.Eq{"roleadditionalcontent.id": rolesIDs}
 	vs, err := s.vertices(tl, vertexClassRoleAdditionalContent, 0, condition, nil)
 	if err != nil {
@@ -2284,7 +2313,7 @@ func (s *DBService) RolesAdditionalContentInternal(tl util.TimeLineSequenceNumbe
 	return rolesAdditionalContent, nil
 }
 
-func (s *DBService) RolesAdditionalContent(tl util.TimeLineSequenceNumber, rolesIDs []util.ID) (map[util.ID]*models.RoleAdditionalContent, error) {
+func (s *DBService) RolesAdditionalContent(tl util.TimeLineNumber, rolesIDs []util.ID) (map[util.ID]*models.RoleAdditionalContent, error) {
 	rolesAdditionalContent, err := s.RolesAdditionalContentInternal(tl, rolesIDs)
 	if err != nil {
 		return nil, err
@@ -2317,7 +2346,7 @@ func (s *DBService) MemberPassword(memberID util.ID) (string, error) {
 func (s *DBService) AuthenticateUIDPassword(memberID util.ID, password string) (*models.Member, error) {
 	tl := s.CurTimeLine()
 
-	member, err := s.MemberInternal(tl.SequenceNumber, memberID)
+	member, err := s.MemberInternal(tl.Number(), memberID)
 	if err != nil {
 		return nil, err
 	}
@@ -2344,7 +2373,7 @@ func (s *DBService) AuthenticateUIDPassword(memberID util.ID, password string) (
 func (s *DBService) AuthenticateUserNamePassword(userName string, password string) (*models.Member, error) {
 	tl := s.CurTimeLine()
 
-	member, err := s.MemberByUserNameInternal(tl.SequenceNumber, userName)
+	member, err := s.MemberByUserNameInternal(tl.Number(), userName)
 	if err != nil {
 		return nil, err
 	}
@@ -2371,7 +2400,7 @@ func (s *DBService) AuthenticateUserNamePassword(userName string, password strin
 func (s *DBService) AuthenticateEmailPassword(email string, password string) (*models.Member, error) {
 	tl := s.CurTimeLine()
 
-	member, err := s.MemberByEmailInternal(tl.SequenceNumber, email)
+	member, err := s.MemberByEmailInternal(tl.Number(), email)
 	if err != nil {
 		return nil, err
 	}
@@ -2395,7 +2424,7 @@ func (s *DBService) AuthenticateEmailPassword(email string, password string) (*m
 	return member, nil
 }
 
-func (s *DBService) CallingMemberInternal(ctx context.Context, curTl util.TimeLineSequenceNumber) (*models.Member, error) {
+func (s *DBService) CallingMemberInternal(ctx context.Context, curTl util.TimeLineNumber) (*models.Member, error) {
 	useridString, ok := ctx.Value("userid").(string)
 	if !ok || useridString == "" {
 		return nil, errors.Errorf("empty userid")
@@ -2423,17 +2452,17 @@ func (s *DBService) CallingMemberInternal(ctx context.Context, curTl util.TimeLi
 	return member, nil
 }
 
-func (s *DBService) CallingMember(ctx context.Context) (*models.Member, util.TimeLineSequenceNumber, error) {
+func (s *DBService) CallingMember(ctx context.Context) (*models.Member, util.TimeLineNumber, error) {
 	tl := s.CurTimeLine()
 
-	member, err := s.CallingMemberInternal(ctx, tl.SequenceNumber)
+	member, err := s.CallingMemberInternal(ctx, tl.Number())
 	if err != nil {
 		return nil, 0, err
 	}
-	return member, tl.SequenceNumber, nil
+	return member, tl.Number(), nil
 }
 
-func (s *DBService) memberIsLeadLink(curTl util.TimeLineSequenceNumber, memberID, roleID util.ID) (bool, error) {
+func (s *DBService) memberIsLeadLink(curTl util.TimeLineNumber, memberID, roleID util.ID) (bool, error) {
 	childsGroups, err := s.ChildRolesInternal(curTl, []util.ID{roleID}, nil)
 	if err != nil {
 		return false, err
@@ -2465,7 +2494,7 @@ func (s *DBService) memberIsLeadLink(curTl util.TimeLineSequenceNumber, memberID
 }
 
 // retrieve permission at the circle level
-func (s *DBService) MemberCirclePermissions(ctx context.Context, tl util.TimeLineSequenceNumber, roleID util.ID) (*models.MemberCirclePermissions, error) {
+func (s *DBService) MemberCirclePermissions(ctx context.Context, tl util.TimeLineNumber, roleID util.ID) (*models.MemberCirclePermissions, error) {
 	cp := &models.MemberCirclePermissions{}
 
 	callingMember, err := s.CallingMemberInternal(ctx, tl)
@@ -2540,45 +2569,37 @@ func (s *DBService) MemberCirclePermissions(ctx context.Context, tl util.TimeLin
 }
 
 func (s *DBService) ApplyEvents(events eventstore.Events) error {
-	preTl := s.CurTimeLine()
-	if preTl.SequenceNumber == 0 {
-		preTl.SequenceNumber = 1
-	}
 	for _, event := range events {
 		if err := s.ApplyEvent(event); err != nil {
 			return err
 		}
 	}
-	postTl := s.CurTimeLine()
-	for tl := preTl.SequenceNumber; tl <= postTl.SequenceNumber; tl++ {
-		if err := s.CheckBrokenEdges(tl); err != nil {
-			return err
-		}
+	curTl := s.CurTimeLine()
+	if err := s.CheckBrokenEdges(curTl.Number()); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (s *DBService) ApplyEvent(event *eventstore.Event) error {
-	log.Debugf("event: %#+v", event)
+	//log.Infof("event: %#+v", event)
 
-	switch event.EventType {
-	case eventstore.EventTypeCommandExecuted:
-	case eventstore.EventTypeCommandExecutionFinished:
+	if event.GroupID == nil {
+		return nil
+	}
 
-	case eventstore.EventTypeTimeLineCreated:
-		// just a runtimecheck that the current timeline is the next one and the time is greater
-		tl := s.CurTimeLine()
-
-		data := event.Data.(*eventstore.EventTimeLineCreated)
-
-		if data.SequenceNumber-tl.SequenceNumber != 1 {
-			return errors.Errorf("expected timeline with sequencenumber %d, got %d", tl.SequenceNumber+1, data.SequenceNumber)
+	tl, err := s.TimeLineForGroupID(*event.GroupID)
+	if err != nil {
+		return err
+	}
+	if tl == nil {
+		//log.Infof("no tl with groupID: %s", event.GroupID)
+		tl = &util.TimeLine{
+			Timestamp: event.Timestamp,
 		}
-		if tl.Timestamp.After(data.TimeStamp) {
-			return errors.Errorf("expected timeline with timestamp after %s, got %s", tl.Timestamp.UTC(), data.TimeStamp.UTC())
-		}
+
 		err := s.tx.Do(func(tx *db.WrappedTx) error {
-			if _, err := tx.Exec("insert into timeline (sequencenumber, timestamp) values ($1, $2)", data.SequenceNumber, data.TimeStamp); err != nil {
+			if _, err := tx.Exec("insert into timeline (timestamp, groupid) values ($1, $2)", tl.Timestamp, event.GroupID.UUID); err != nil {
 				return errors.Wrap(err, "failed to insert timeline")
 			}
 			return nil
@@ -2586,22 +2607,32 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		if err != nil {
 			return err
 		}
-
-		// update cached curTl
-		s.curTlLock.Lock()
-		s.curTl, err = s.curTimeLineFromDB()
-		s.curTlLock.Unlock()
-
+		// Reread to inserted timeline since postgres has a microsecond resolution
+		// so the nanosecond will be lost
+		tl, err = s.TimeLineForGroupID(*event.GroupID)
 		if err != nil {
 			return err
 		}
+	}
+
+	s.curTlLock.Lock()
+	s.curTl, err = s.curTimeLineFromDB()
+	s.curTlLock.Unlock()
+	if err != nil {
+		return err
+	}
+	//log.Infof("tl:", tl)
+
+	switch event.EventType {
+	case eventstore.EventTypeCommandExecuted:
+	case eventstore.EventTypeCommandExecutionFinished:
 
 	case eventstore.EventTypeRoleCreated:
 		data := event.Data.(*eventstore.EventRoleCreated)
 		// We have to calculate the role depth
 		depth := int32(0)
 		if data.ParentRoleID != nil {
-			prole, err := s.RoleInternal(data.TimeLine.SequenceNumber, *data.ParentRoleID)
+			prole, err := s.RoleInternal(tl.Number(), *data.ParentRoleID)
 			if err != nil {
 				return err
 			}
@@ -2616,27 +2647,27 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 			Name:     data.Name,
 			Purpose:  data.Purpose,
 		}
-		if err := s.newVertex(data.TimeLine.SequenceNumber, data.RoleID, vertexClassRole, role); err != nil {
+		if err := s.newVertex(tl.Number(), data.RoleID, vertexClassRole, role); err != nil {
 			return err
 		}
 		if data.ParentRoleID != nil {
-			if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassRoleRole, *data.ParentRoleID, data.RoleID); err != nil {
+			if err := s.addEdge(tl.Number(), edgeClassRoleRole, *data.ParentRoleID, data.RoleID); err != nil {
 				return err
 			}
 		}
 
 	case eventstore.EventTypeRoleDeleted:
 		data := event.Data.(*eventstore.EventRoleDeleted)
-		proleGroups, err := s.RoleParentInternal(data.TimeLine.SequenceNumber, []util.ID{data.RoleID})
+		proleGroups, err := s.RoleParentInternal(tl.Number(), []util.ID{data.RoleID})
 		if err != nil {
 			return err
 		}
 		prole := proleGroups[data.RoleID]
-		if err := s.deleteVertex(data.TimeLine.SequenceNumber, vertexClassRole, data.RoleID); err != nil {
+		if err := s.deleteVertex(tl.Number(), vertexClassRole, data.RoleID); err != nil {
 			return err
 		}
 		if prole != nil {
-			if err := s.deleteEdge(data.TimeLine.SequenceNumber, edgeClassRoleRole, prole.ID, data.RoleID); err != nil {
+			if err := s.deleteEdge(tl.Number(), edgeClassRoleRole, prole.ID, data.RoleID); err != nil {
 				return err
 			}
 		}
@@ -2644,7 +2675,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeRoleUpdated:
 		data := event.Data.(*eventstore.EventRoleUpdated)
 		// We have to retrieve the current role depth
-		crole, err := s.RoleInternal(data.TimeLine.SequenceNumber, data.RoleID)
+		crole, err := s.RoleInternal(tl.Number(), data.RoleID)
 		if err != nil {
 			return err
 		}
@@ -2657,7 +2688,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 			Name:     data.Name,
 			Purpose:  data.Purpose,
 		}
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassRole, data.RoleID, role); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassRole, data.RoleID, role); err != nil {
 			return err
 		}
 
@@ -2667,10 +2698,10 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		domain := &models.Domain{
 			Description: data.Description,
 		}
-		if err := s.newVertex(data.TimeLine.SequenceNumber, domainID, vertexClassDomain, domain); err != nil {
+		if err := s.newVertex(tl.Number(), domainID, vertexClassDomain, domain); err != nil {
 			return err
 		}
-		if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassRoleDomain, domainID, data.RoleID); err != nil {
+		if err := s.addEdge(tl.Number(), edgeClassRoleDomain, domainID, data.RoleID); err != nil {
 			return err
 		}
 
@@ -2680,17 +2711,17 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		domain := &models.Domain{
 			Description: data.Description,
 		}
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassDomain, domainID, domain); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassDomain, domainID, domain); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleDomainDeleted:
 		data := event.Data.(*eventstore.EventRoleDomainDeleted)
 		domainID := data.DomainID
-		if err := s.deleteVertex(data.TimeLine.SequenceNumber, vertexClassDomain, domainID); err != nil {
+		if err := s.deleteVertex(tl.Number(), vertexClassDomain, domainID); err != nil {
 			return err
 		}
-		if err := s.deleteEdge(data.TimeLine.SequenceNumber, edgeClassRoleDomain, domainID, data.RoleID); err != nil {
+		if err := s.deleteEdge(tl.Number(), edgeClassRoleDomain, domainID, data.RoleID); err != nil {
 			return err
 		}
 
@@ -2700,10 +2731,10 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		accountability := &models.Accountability{
 			Description: data.Description,
 		}
-		if err := s.newVertex(data.TimeLine.SequenceNumber, accountabilityID, vertexClassAccountability, accountability); err != nil {
+		if err := s.newVertex(tl.Number(), accountabilityID, vertexClassAccountability, accountability); err != nil {
 			return err
 		}
-		if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassRoleAccountability, accountabilityID, data.RoleID); err != nil {
+		if err := s.addEdge(tl.Number(), edgeClassRoleAccountability, accountabilityID, data.RoleID); err != nil {
 			return err
 		}
 
@@ -2713,17 +2744,17 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		accountability := &models.Accountability{
 			Description: data.Description,
 		}
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassAccountability, accountabilityID, accountability); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassAccountability, accountabilityID, accountability); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleAccountabilityDeleted:
 		data := event.Data.(*eventstore.EventRoleAccountabilityDeleted)
 		accountabilityID := data.AccountabilityID
-		if err := s.deleteVertex(data.TimeLine.SequenceNumber, vertexClassAccountability, accountabilityID); err != nil {
+		if err := s.deleteVertex(tl.Number(), vertexClassAccountability, accountabilityID); err != nil {
 			return err
 		}
-		if err := s.deleteEdge(data.TimeLine.SequenceNumber, edgeClassRoleAccountability, accountabilityID, data.RoleID); err != nil {
+		if err := s.deleteEdge(tl.Number(), edgeClassRoleAccountability, accountabilityID, data.RoleID); err != nil {
 			return err
 		}
 
@@ -2732,67 +2763,67 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		roleAdditionalContent := &models.RoleAdditionalContent{
 			Content: data.Content,
 		}
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassRoleAdditionalContent, data.RoleID, roleAdditionalContent); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassRoleAdditionalContent, data.RoleID, roleAdditionalContent); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleChangedParent:
 		data := event.Data.(*eventstore.EventRoleChangedParent)
-		if err := s.changeRoleParent(data.TimeLine.SequenceNumber, data.RoleID, data.ParentRoleID); err != nil {
+		if err := s.changeRoleParent(tl.Number(), data.RoleID, data.ParentRoleID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleMemberAdded:
 		data := event.Data.(*eventstore.EventRoleMemberAdded)
-		if err := s.roleAddMember(data.TimeLine.SequenceNumber, data.RoleID, data.MemberID, data.Focus, data.NoCoreMember); err != nil {
+		if err := s.roleAddMember(tl.Number(), data.RoleID, data.MemberID, data.Focus, data.NoCoreMember); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleMemberUpdated:
 		data := event.Data.(*eventstore.EventRoleMemberUpdated)
-		if err := s.roleUpdateMember(data.TimeLine.SequenceNumber, data.RoleID, data.MemberID, data.Focus, data.NoCoreMember); err != nil {
+		if err := s.roleUpdateMember(tl.Number(), data.RoleID, data.MemberID, data.Focus, data.NoCoreMember); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleMemberRemoved:
 		data := event.Data.(*eventstore.EventRoleMemberRemoved)
-		if err := s.roleRemoveMember(data.TimeLine.SequenceNumber, data.RoleID, data.MemberID); err != nil {
+		if err := s.roleRemoveMember(tl.Number(), data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleDirectMemberAdded:
 		data := event.Data.(*eventstore.EventCircleDirectMemberAdded)
-		if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassCircleDirectMember, data.MemberID, data.RoleID); err != nil {
+		if err := s.addEdge(tl.Number(), edgeClassCircleDirectMember, data.MemberID, data.RoleID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleDirectMemberRemoved:
 		data := event.Data.(*eventstore.EventCircleDirectMemberRemoved)
-		if err := s.circleRemoveDirectMember(data.TimeLine.SequenceNumber, data.RoleID, data.MemberID); err != nil {
+		if err := s.circleRemoveDirectMember(tl.Number(), data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleLeadLinkMemberSet:
 		data := event.Data.(*eventstore.EventCircleLeadLinkMemberSet)
-		if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassRoleMember, data.MemberID, data.LeadLinkRoleID, nil, false, nil); err != nil {
+		if err := s.addEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.LeadLinkRoleID, nil, false, nil); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleLeadLinkMemberUnset:
 		data := event.Data.(*eventstore.EventCircleLeadLinkMemberUnset)
-		if err := s.deleteEdge(data.TimeLine.SequenceNumber, edgeClassRoleMember, data.MemberID, data.LeadLinkRoleID); err != nil {
+		if err := s.deleteEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.LeadLinkRoleID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleCoreRoleMemberSet:
 		data := event.Data.(*eventstore.EventCircleCoreRoleMemberSet)
-		if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassRoleMember, data.MemberID, data.CoreRoleID, nil, false, data.ElectionExpiration); err != nil {
+		if err := s.addEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.CoreRoleID, nil, false, data.ElectionExpiration); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleCoreRoleMemberUnset:
 		data := event.Data.(*eventstore.EventCircleCoreRoleMemberUnset)
-		if err := s.deleteEdge(data.TimeLine.SequenceNumber, edgeClassRoleMember, data.MemberID, data.CoreRoleID); err != nil {
+		if err := s.deleteEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.CoreRoleID); err != nil {
 			return err
 		}
 
@@ -2803,14 +2834,14 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 			Description: data.Description,
 			Closed:      false,
 		}
-		if err := s.newVertex(data.TimeLine.SequenceNumber, event.AggregateID, vertexClassTension, tension); err != nil {
+		if err := s.newVertex(tl.Number(), event.AggregateID, vertexClassTension, tension); err != nil {
 			return err
 		}
-		if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassMemberTension, event.AggregateID, data.MemberID); err != nil {
+		if err := s.addEdge(tl.Number(), edgeClassMemberTension, event.AggregateID, data.MemberID); err != nil {
 			return err
 		}
 		if data.RoleID != nil {
-			if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassRoleTension, event.AggregateID, *data.RoleID); err != nil {
+			if err := s.addEdge(tl.Number(), edgeClassRoleTension, event.AggregateID, *data.RoleID); err != nil {
 				return err
 			}
 		}
@@ -2823,26 +2854,26 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 			Closed:      false,
 		}
 
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassTension, event.AggregateID, tension); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassTension, event.AggregateID, tension); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeTensionRoleChanged:
 		data := event.Data.(*eventstore.EventTensionRoleChanged)
 		if data.PrevRoleID != nil {
-			if err := s.deleteEdge(data.TimeLine.SequenceNumber, edgeClassRoleTension, event.AggregateID, *data.PrevRoleID); err != nil {
+			if err := s.deleteEdge(tl.Number(), edgeClassRoleTension, event.AggregateID, *data.PrevRoleID); err != nil {
 				return err
 			}
 		}
 		if data.RoleID != nil {
-			if err := s.addEdge(data.TimeLine.SequenceNumber, edgeClassRoleTension, event.AggregateID, *data.RoleID); err != nil {
+			if err := s.addEdge(tl.Number(), edgeClassRoleTension, event.AggregateID, *data.RoleID); err != nil {
 				return err
 			}
 		}
 
 	case eventstore.EventTypeTensionClosed:
 		data := event.Data.(*eventstore.EventTensionClosed)
-		tension, err := s.TensionInternal(data.TimeLine.SequenceNumber, event.AggregateID)
+		tension, err := s.TensionInternal(tl.Number(), event.AggregateID)
 		if err != nil {
 			return err
 		}
@@ -2852,7 +2883,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 
 		tension.Closed = true
 		tension.CloseReason = data.Reason
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassTension, event.AggregateID, tension); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassTension, event.AggregateID, tension); err != nil {
 			return err
 		}
 
@@ -2864,7 +2895,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 			FullName: data.FullName,
 			Email:    data.Email,
 		}
-		if err := s.newVertex(data.TimeLine.SequenceNumber, event.AggregateID, vertexClassMember, member); err != nil {
+		if err := s.newVertex(tl.Number(), event.AggregateID, vertexClassMember, member); err != nil {
 			return err
 		}
 
@@ -2876,7 +2907,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 			FullName: data.FullName,
 			Email:    data.Email,
 		}
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassMember, event.AggregateID, member); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassMember, event.AggregateID, member); err != nil {
 			return err
 		}
 
@@ -2899,7 +2930,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		memberAvatar := &models.Avatar{
 			Image: data.Image,
 		}
-		if err := s.updateVertex(data.TimeLine.SequenceNumber, vertexClassMemberAvatar, event.AggregateID, memberAvatar); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassMemberAvatar, event.AggregateID, memberAvatar); err != nil {
 			return err
 		}
 
@@ -2934,15 +2965,13 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 		if createChildChangeAppliedEvent {
-			roleEvent := models.NewRoleEventCircleChangesApplied(command.TimeLine.SequenceNumber, event.ID, roleID, issuerID)
+			roleEvent := models.NewRoleEventCircleChangesApplied(tl.Number(), event.ID, roleID, issuerID)
 			if err := s.insertRoleEvent(roleEvent); err != nil {
 				return err
 			}
 		}
 
 	case eventstore.EventTypeCommandExecutionFinished:
-
-	case eventstore.EventTypeTimeLineCreated:
 
 	case eventstore.EventTypeRoleCreated:
 		data := event.Data.(*eventstore.EventRoleCreated)
@@ -2953,7 +2982,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 		if data.ParentRoleID != nil {
-			prole, err := s.RoleInternal(data.TimeLine.SequenceNumber, *data.ParentRoleID)
+			prole, err := s.RoleInternal(tl.Number(), *data.ParentRoleID)
 			if err != nil {
 				return err
 			}
@@ -2961,7 +2990,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 				return errors.Errorf("role with id %d doesn't exist", *data.ParentRoleID)
 			}
 
-			roleEvent, err := s.getCircleChangesAppliedRoleEvent(data.TimeLine.SequenceNumber, prole.ID)
+			roleEvent, err := s.getCircleChangesAppliedRoleEvent(tl.Number(), prole.ID)
 			if err != nil {
 				return err
 			}
@@ -2981,13 +3010,13 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeRoleDeleted:
 		data := event.Data.(*eventstore.EventRoleDeleted)
 
-		proleGroups, err := s.RoleParentInternal(data.TimeLine.SequenceNumber-1, []util.ID{data.RoleID})
+		proleGroups, err := s.RoleParentInternal(tl.Number()-1, []util.ID{data.RoleID})
 		if err != nil {
 			return err
 		}
 		prole := proleGroups[data.RoleID]
 
-		roleEvent, err := s.getCircleChangesAppliedRoleEvent(data.TimeLine.SequenceNumber, prole.ID)
+		roleEvent, err := s.getCircleChangesAppliedRoleEvent(tl.Number(), prole.ID)
 		if err != nil {
 			return err
 		}
@@ -3023,7 +3052,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeRoleUpdated:
 		data := event.Data.(*eventstore.EventRoleUpdated)
 
-		proleGroups, err := s.RoleParentInternal(data.TimeLine.SequenceNumber, []util.ID{data.RoleID})
+		proleGroups, err := s.RoleParentInternal(tl.Number(), []util.ID{data.RoleID})
 		if err != nil {
 			return err
 		}
@@ -3034,7 +3063,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 			break
 		}
 
-		roleEvent, err := s.getCircleChangesAppliedRoleEvent(data.TimeLine.SequenceNumber, prole.ID)
+		roleEvent, err := s.getCircleChangesAppliedRoleEvent(tl.Number(), prole.ID)
 		if err != nil {
 			return err
 		}
@@ -3104,14 +3133,14 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeRoleChangedParent:
 		data := event.Data.(*eventstore.EventRoleChangedParent)
 
-		prole, err := s.RoleInternal(data.TimeLine.SequenceNumber, *data.ParentRoleID)
+		prole, err := s.RoleInternal(tl.Number(), *data.ParentRoleID)
 		if err != nil {
 			return err
 		}
 		if prole == nil {
 			return errors.Errorf("role with id %d doesn't exist", *data.ParentRoleID)
 		}
-		prevProleGroups, err := s.RoleParentInternal(data.TimeLine.SequenceNumber-1, []util.ID{data.RoleID})
+		prevProleGroups, err := s.RoleParentInternal(tl.Number()-1, []util.ID{data.RoleID})
 		if err != nil {
 			return err
 		}
@@ -3122,7 +3151,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 
 		// handle the role moved to the role on which the role change command
 		// was executed (from child role to parent)
-		roleEvent, err := s.getCircleChangesAppliedRoleEvent(data.TimeLine.SequenceNumber, prole.ID)
+		roleEvent, err := s.getCircleChangesAppliedRoleEvent(tl.Number(), prole.ID)
 		if err != nil {
 			return err
 		}
@@ -3156,7 +3185,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 
 		// handle the role moved from the role on which the role change command
 		// was executed (from parent to child role)
-		roleEvent, err = s.getCircleChangesAppliedRoleEvent(data.TimeLine.SequenceNumber, prevProle.ID)
+		roleEvent, err = s.getCircleChangesAppliedRoleEvent(tl.Number(), prevProle.ID)
 		if err != nil {
 			return err
 		}
@@ -3243,12 +3272,9 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		panic(errors.Errorf("unhandled event: %s", event.EventType))
 	}
 
-	err := s.tx.Do(func(tx *db.WrappedTx) error {
-		if _, err := tx.Exec("delete from eventstate"); err != nil {
-			return errors.Wrap(err, "failed to delete eventstate")
-		}
-		if _, err := tx.Exec("insert into eventstate (lastsequencenumber) values ($1)", event.SequenceNumber); err != nil {
-			return errors.Wrap(err, "failed to save eventstate")
+	err = s.tx.Do(func(tx *db.WrappedTx) error {
+		if _, err := tx.Exec("insert into sequencenumber (sequencenumber) values ($1)", event.SequenceNumber); err != nil {
+			return errors.Wrap(err, "failed to save sequencenumber")
 		}
 		return nil
 	})
@@ -3259,7 +3285,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 	return nil
 }
 
-func (s *DBService) getCircleChangesAppliedRoleEvent(timeLine util.TimeLineSequenceNumber, roleID util.ID) (*models.RoleEvent, error) {
+func (s *DBService) getCircleChangesAppliedRoleEvent(timeLine util.TimeLineNumber, roleID util.ID) (*models.RoleEvent, error) {
 	roleEvents, err := s.RoleEventsByTypeInternal(roleID, timeLine, models.RoleEventTypeCircleChangesApplied)
 	if err != nil {
 		return nil, err
@@ -3276,9 +3302,9 @@ func (s *DBService) getCircleChangesAppliedRoleEvent(timeLine util.TimeLineSeque
 func (s *DBService) getEventCausingCommand(event *eventstore.Event) (*eventstore.Event, error) {
 	es := eventstore.NewEventStore(s.tx)
 	var commandEvent *eventstore.Event
-	// find the event generating command, we walk the various causationID until we find an event of type command
+	// find the event generating command, we walk the various groupID until we find an event of type command
 	for {
-		e, err := es.GetEvent(event.CausationID)
+		e, err := es.GetEvent(event.GroupID)
 		if err != nil {
 			return nil, err
 		}
@@ -3293,7 +3319,7 @@ func (s *DBService) getEventCausingCommand(event *eventstore.Event) (*eventstore
 	return commandEvent, nil
 }
 
-func (s *DBService) changeRoleParent(nextTl util.TimeLineSequenceNumber, roleID util.ID, newParentID *util.ID) error {
+func (s *DBService) changeRoleParent(nextTl util.TimeLineNumber, roleID util.ID, newParentID *util.ID) error {
 	curTl := nextTl - 1
 	curParentGroups, err := s.RoleParentInternal(curTl, []util.ID{roleID})
 	if err != nil {
@@ -3339,7 +3365,7 @@ func (s *DBService) changeRoleParent(nextTl util.TimeLineSequenceNumber, roleID 
 }
 
 // recursively update all child roles depth
-func (s *DBService) updateChildsDepth(tl util.TimeLineSequenceNumber, pdepth int32, roleID util.ID) error {
+func (s *DBService) updateChildsDepth(tl util.TimeLineNumber, pdepth int32, roleID util.ID) error {
 	childsGroups, err := s.ChildRoles(tl, []util.ID{roleID})
 	if err != nil {
 		return err
@@ -3359,14 +3385,14 @@ func (s *DBService) updateChildsDepth(tl util.TimeLineSequenceNumber, pdepth int
 	return nil
 }
 
-func (s *DBService) roleAddMember(tl util.TimeLineSequenceNumber, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) error {
+func (s *DBService) roleAddMember(tl util.TimeLineNumber, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) error {
 	if err := s.addEdge(tl, edgeClassRoleMember, memberID, roleID, focus, noCoreMember, nil); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *DBService) roleUpdateMember(tl util.TimeLineSequenceNumber, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) error {
+func (s *DBService) roleUpdateMember(tl util.TimeLineNumber, roleID util.ID, memberID util.ID, focus *string, noCoreMember bool) error {
 	if err := s.deleteEdge(tl, edgeClassRoleMember, memberID, roleID); err != nil {
 		return err
 	}
@@ -3376,14 +3402,14 @@ func (s *DBService) roleUpdateMember(tl util.TimeLineSequenceNumber, roleID util
 	return nil
 }
 
-func (s *DBService) roleRemoveMember(tl util.TimeLineSequenceNumber, roleID util.ID, memberID util.ID) error {
+func (s *DBService) roleRemoveMember(tl util.TimeLineNumber, roleID util.ID, memberID util.ID) error {
 	if err := s.deleteEdge(tl, edgeClassRoleMember, memberID, roleID); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *DBService) circleRemoveDirectMember(tl util.TimeLineSequenceNumber, roleID, memberID util.ID) error {
+func (s *DBService) circleRemoveDirectMember(tl util.TimeLineNumber, roleID, memberID util.ID) error {
 	if err := s.deleteEdge(tl, edgeClassCircleDirectMember, memberID, roleID); err != nil {
 		return err
 	}

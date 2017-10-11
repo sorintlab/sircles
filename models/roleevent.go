@@ -13,7 +13,7 @@ const (
 )
 
 type RoleEvent struct {
-	TimeLineID util.TimeLineSequenceNumber
+	TimeLineID util.TimeLineNumber
 	ID         util.ID
 	RoleID     util.ID
 	EventType  RoleEventType
@@ -29,7 +29,7 @@ func GetRoleEventDataType(eventType RoleEventType) interface{} {
 	}
 }
 
-func newRoleEvent(timeLineID util.TimeLineSequenceNumber, id, roleID util.ID, eventType RoleEventType, data interface{}) *RoleEvent {
+func newRoleEvent(timeLineID util.TimeLineNumber, id, roleID util.ID, eventType RoleEventType, data interface{}) *RoleEvent {
 	return &RoleEvent{
 		TimeLineID: timeLineID,
 		ID:         id,
@@ -68,7 +68,7 @@ type RoleEventCircleChangesApplied struct {
 	RolesToCircle map[util.ID]util.ID
 }
 
-func NewRoleEventCircleChangesApplied(timeLineID util.TimeLineSequenceNumber, id, roleID, issuerID util.ID) *RoleEvent {
+func NewRoleEventCircleChangesApplied(timeLineID util.TimeLineNumber, id, roleID, issuerID util.ID) *RoleEvent {
 	return newRoleEvent(
 		timeLineID,
 		id,

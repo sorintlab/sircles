@@ -98,18 +98,22 @@ var migrations = []migration{
 	{
 		stmts: []string{
 			// === EventStore ===
-			`create table event (id uuid, sequencenumber bigint, eventtype varchar not null, aggregatetype varchar, aggregateid uuid, timestamp timestamptz not null, version bigint, correlationid uuid, causationid uuid, data bytea,
+			`create table event (id uuid, sequencenumber bigint, eventtype varchar not null, aggregatetype varchar, aggregateid uuid, timestamp timestamptz not null, version bigint, correlationid uuid, causationid uuid, groupid uuid, data bytea,
 		PRIMARY KEY (sequencenumber))`,
 			// stores the latest version for every aggregate
 			"create table aggregateversion (aggregatetype varchar, aggregateid uuid, version bigint, PRIMARY KEY(aggregateid, version))",
 
 			// === ReadDB ===
 
-			// last processed event
-			"create table eventstate (lastsequencenumber bigint)",
+			// processed events sequencenumbers
+			"create table sequencenumber (sequencenumber bigint, PRIMARY KEY(sequencenumber))",
 
 			// timeline
-			"create table timeline (sequencenumber bigint, timestamp timestamptz not null)",
+			// we can end with different "events" happening at the same time
+			// (with millisecond precision for postgres), so timestamp cannot be
+			// unique.
+			"create table timeline (timestamp timestamptz not null, groupid uuid, PRIMARY KEY(groupid))",
+			"create index timeline_ts on timeline(timestamp)",
 
 			// role is a one to many relation with child roles so it could be represented
 			// in the child role with a parent id. But, since we are implementing a time

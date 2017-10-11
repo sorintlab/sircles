@@ -29,7 +29,7 @@ type tlDataLoaders struct {
 	TensionRole           dataloader.Interface
 }
 
-func NewTlDataLoaders(ctx context.Context, s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) *tlDataLoaders {
+func NewTlDataLoaders(ctx context.Context, s readdb.ReadDB, timeLine util.TimeLineNumber) *tlDataLoaders {
 	return &tlDataLoaders{
 		RoleDomains:           dataloader.NewBatchedLoader(RoleDomainsBatchFn(s, timeLine)),
 		RoleAccountabilities:  dataloader.NewBatchedLoader(RoleAccountabilitiesBatchFn(s, timeLine)),
@@ -51,7 +51,7 @@ func NewTlDataLoaders(ctx context.Context, s readdb.ReadDB, timeLine util.TimeLi
 type DataLoaders struct {
 	ctx   context.Context
 	s     readdb.ReadDB
-	tldls map[util.TimeLineSequenceNumber]*tlDataLoaders
+	tldls map[util.TimeLineNumber]*tlDataLoaders
 	l     sync.Mutex
 }
 
@@ -59,11 +59,11 @@ func NewDataLoaders(ctx context.Context, s readdb.ReadDB) *DataLoaders {
 	return &DataLoaders{
 		ctx:   ctx,
 		s:     s,
-		tldls: make(map[util.TimeLineSequenceNumber]*tlDataLoaders),
+		tldls: make(map[util.TimeLineNumber]*tlDataLoaders),
 	}
 }
 
-func (dls *DataLoaders) Get(timeLine util.TimeLineSequenceNumber) *tlDataLoaders {
+func (dls *DataLoaders) Get(timeLine util.TimeLineNumber) *tlDataLoaders {
 	dls.l.Lock()
 	defer dls.l.Unlock()
 	if tldl, ok := dls.tldls[timeLine]; ok {
@@ -86,7 +86,7 @@ func keysToIDs(ikeys []string) []util.ID {
 	return keys
 }
 
-func RoleDomainsBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func RoleDomainsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -113,7 +113,7 @@ func RoleDomainsBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) f
 	}
 }
 
-func RoleAccountabilitiesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func RoleAccountabilitiesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -140,7 +140,7 @@ func RoleAccountabilitiesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequence
 	}
 }
 
-func RoleAdditionalContentBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func RoleAdditionalContentBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -167,7 +167,7 @@ func RoleAdditionalContentBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenc
 	}
 }
 
-func ChildRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func ChildRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -194,7 +194,7 @@ func ChildRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) fun
 	}
 }
 
-func RoleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func RoleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -221,7 +221,7 @@ func RoleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumbe
 	}
 }
 
-func CircleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func CircleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -248,7 +248,7 @@ func CircleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNum
 	}
 }
 
-func MemberCircleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func MemberCircleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -275,7 +275,7 @@ func MemberCircleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNum
 	}
 }
 
-func MemberRoleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func MemberRoleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -302,7 +302,7 @@ func MemberRoleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumbe
 	}
 }
 
-func RoleParentBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func RoleParentBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -329,7 +329,7 @@ func RoleParentBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) fu
 	}
 }
 
-func RoleParentsBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func RoleParentsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -356,7 +356,7 @@ func RoleParentsBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) f
 	}
 }
 
-func TensionMemberBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func TensionMemberBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -383,7 +383,7 @@ func TensionMemberBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber)
 	}
 }
 
-func MemberTensionsBatchFn(ctx context.Context, s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func MemberTensionsBatchFn(ctx context.Context, s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -410,7 +410,7 @@ func MemberTensionsBatchFn(ctx context.Context, s readdb.ReadDB, timeLine util.T
 	}
 }
 
-func TensionRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func TensionRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -437,7 +437,7 @@ func TensionRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) f
 	}
 }
 
-func RoleTensionsBatchFn(s readdb.ReadDB, timeLine util.TimeLineSequenceNumber) func(ikeys []string) []*dataloader.Result {
+func RoleTensionsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
