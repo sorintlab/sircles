@@ -153,6 +153,10 @@ type WrappedTx struct {
 	t  DBType
 }
 
+func (db *DB) Close() error {
+	return db.db.Close()
+}
+
 func (db *DB) NewTx() (*Tx, error) {
 	tx, err := db.db.Begin()
 	if err != nil {
