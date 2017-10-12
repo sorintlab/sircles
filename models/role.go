@@ -52,6 +52,12 @@ type Role struct {
 	Purpose  string
 }
 
+type Roles []*Role
+
+func (r Roles) Len() int           { return len(r) }
+func (r Roles) Less(i, j int) bool { return r[i].Name < r[j].Name }
+func (r Roles) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+
 type RoleAdditionalContent struct {
 	Vertex
 	Content string
