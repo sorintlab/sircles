@@ -1661,15 +1661,15 @@ func (r *Resolver) CreateMember(ctx context.Context, args *struct {
 }) (*createMemberResultResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
-	avatar := ctx.Value("image").([]byte)
+	avatar := ctx.Value("image")
 
 	mr, err := args.CreateMemberChange.toCommandChange()
 	if err != nil {
 		return nil, err
 	}
 
-	if avatar != nil {
-		mr.AvatarData.Avatar = avatar
+	if mr.AvatarData != nil && avatar != nil {
+		mr.AvatarData.Avatar = avatar.([]byte)
 	}
 
 	res, timeLineID, err := cs.CreateMember(ctx, mr)
@@ -1692,15 +1692,15 @@ func (r *Resolver) UpdateMember(ctx context.Context, args *struct {
 }) (*updateMemberResultResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
-	avatar := ctx.Value("image").([]byte)
+	avatar := ctx.Value("image")
 
 	mr, err := args.UpdateMemberChange.toCommandChange()
 	if err != nil {
 		return nil, err
 	}
 
-	if avatar != nil {
-		mr.AvatarData.Avatar = avatar
+	if mr.AvatarData != nil && avatar != nil {
+		mr.AvatarData.Avatar = avatar.([]byte)
 	}
 
 	res, timeLineID, err := cs.UpdateMember(ctx, mr)
