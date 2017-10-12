@@ -3,6 +3,7 @@ package graphql
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -392,14 +393,61 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 	}
 	defer os.RemoveAll(tmpDir)
 
+	var dbType string
+	switch os.Getenv("DB_TYPE") {
+	case "":
+		dbType = "sqlite3"
+	case "sqlite3":
+		dbType = "sqlite3"
+	case "postgres":
+		dbType = "postgres"
+	default:
+		log.Fatalf("unknown db type")
+	}
+
+	pgConnString := os.Getenv("PG_CONNSTRING")
+
 	uidGenerator := NewTestUIDGen()
 
-	dbpath := filepath.Join(tmpDir, "db.ql")
+	var tdb *db.DB
 
-	db, err := db.NewDB("sqlite3", dbpath)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	switch dbType {
+	case "sqlite3":
+		dbpath := filepath.Join(tmpDir, "db")
+		tdb, err = db.NewDB("sqlite3", dbpath)
+	case "postgres":
+		dbname := "postgres" + filepath.Base(tmpDir)
+
+		pgdb, err := sql.Open("postgres", fmt.Sprintf(pgConnString, "postgres"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		defer func() {
+			_, err = pgdb.Exec(fmt.Sprintf("drop database %s", dbname))
+			if err != nil {
+				t.Logf("unexpected error: %v", err)
+			}
+			pgdb.Close()
+		}()
+
+		_, err = pgdb.Exec(fmt.Sprintf("drop database if exists %s", dbname))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		_, err = pgdb.Exec(fmt.Sprintf("create database %s", dbname))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		tdb, err = db.NewDB("postgres", fmt.Sprintf(pgConnString, dbname))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	default:
+		log.Fatalf("unknown db type")
 	}
+
+	defer tdb.Close()
 
 	resolver := NewResolver()
 	schema, err := graphql.ParseSchema(Schema, resolver)
@@ -407,7 +455,7 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 		t.Fatal(err)
 	}
 
-	tx, err := db.NewTx()
+	tx, err := tdb.NewTx()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -451,13 +499,13 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 	}
 
 	if len(tests) == 1 {
-		RunTest(ctx, t, schema, db, uidGenerator, tests[0])
+		RunTest(ctx, t, schema, tdb, uidGenerator, tests[0])
 		return
 	}
 
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			RunTest(ctx, t, schema, db, uidGenerator, test)
+			RunTest(ctx, t, schema, tdb, uidGenerator, test)
 		})
 	}
 }
