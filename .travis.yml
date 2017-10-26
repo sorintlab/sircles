@@ -16,6 +16,7 @@ addons:
     packages:
     - ldap-utils
     - slapd
+  postgresql: "9.6"
 
 install:
   - . $HOME/.nvm/nvm.sh
@@ -27,4 +28,5 @@ script:
   - make
   # TODO(sgotti) temporarily disabled ldap tests
   ##SIRCLES_LDAP_TESTS=1 make test
-  - make test
+  - DB_TYPE=postgres PG_CONNSTRING='postgres://postgres@localhost/%s?sslmode=disable' make test
+  - DB_TYPE=sqlite3 make test
