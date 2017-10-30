@@ -1723,7 +1723,6 @@ func (r *Resolver) SetMemberPassword(ctx context.Context, args *struct {
 	CurPassword *string
 	NewPassword string
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 
 	memberID, err := unmarshalUID(args.MemberUID)
@@ -1739,14 +1738,13 @@ func (r *Resolver) SetMemberPassword(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) SetMemberMatchUID(ctx context.Context, args *struct {
 	MemberUID graphql.ID
 	MatchUID  string
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 
 	memberID, err := unmarshalUID(args.MemberUID)
@@ -1758,7 +1756,7 @@ func (r *Resolver) SetMemberMatchUID(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) ImportMember(ctx context.Context, args *struct {
@@ -1852,7 +1850,6 @@ func (r *Resolver) CircleSetLeadLinkMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1866,13 +1863,12 @@ func (r *Resolver) CircleSetLeadLinkMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) CircleUnsetLeadLinkMember(ctx context.Context, args *struct {
 	RoleUID graphql.ID
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1882,7 +1878,7 @@ func (r *Resolver) CircleUnsetLeadLinkMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) CircleSetCoreRoleMember(ctx context.Context, args *struct {
@@ -1891,7 +1887,6 @@ func (r *Resolver) CircleSetCoreRoleMember(ctx context.Context, args *struct {
 	MemberUID          graphql.ID
 	ElectionExpiration *graphql.Time
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1909,14 +1904,13 @@ func (r *Resolver) CircleSetCoreRoleMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) CircleUnsetCoreRoleMember(ctx context.Context, args *struct {
 	RoleType string
 	RoleUID  graphql.ID
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1926,14 +1920,13 @@ func (r *Resolver) CircleUnsetCoreRoleMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) CircleAddDirectMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1947,14 +1940,13 @@ func (r *Resolver) CircleAddDirectMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) CircleRemoveDirectMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1968,7 +1960,7 @@ func (r *Resolver) CircleRemoveDirectMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) RoleAddMember(ctx context.Context, args *struct {
@@ -1977,7 +1969,6 @@ func (r *Resolver) RoleAddMember(ctx context.Context, args *struct {
 	Focus        *string
 	NoCoreMember bool
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1991,14 +1982,13 @@ func (r *Resolver) RoleAddMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) RoleRemoveMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDB)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -2012,7 +2002,7 @@ func (r *Resolver) RoleRemoveMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &genericResultResolver{s, res}, nil
+	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) Search(ctx context.Context, args *struct {
@@ -2028,7 +2018,6 @@ func (r *Resolver) Search(ctx context.Context, args *struct {
 }
 
 type genericResultResolver struct {
-	s   readdb.ReadDB
 	res *change.GenericResult
 }
 
