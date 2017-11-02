@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
 
 	"github.com/sorintlab/sircles/change"
@@ -267,20 +266,14 @@ var circleMemberQuery = `
 	}
 `
 
-type TestUIDGen struct {
-	uid   int64
-	mutex sync.Mutex
-}
-
-func NewTestUIDGen() *TestUIDGen {
-	return &TestUIDGen{uid: 1000}
-}
+type TestUIDGen struct{}
 
 func (g *TestUIDGen) UUID(s string) util.ID {
-	g.mutex.Lock()
-	defer g.mutex.Unlock()
+	if s == "" {
+		u := uuid.NewV4()
+		return util.NewFromUUID(u)
+	}
 	u := uuid.NewV5(uuid.NamespaceDNS, s)
-	g.uid++
 	return util.NewFromUUID(u)
 }
 
@@ -407,7 +400,7 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 
 	pgConnString := os.Getenv("PG_CONNSTRING")
 
-	uidGenerator := NewTestUIDGen()
+	uidGenerator := &TestUIDGen{}
 
 	var tdb *db.DB
 
