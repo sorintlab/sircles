@@ -15,8 +15,8 @@ import (
 func TestWriteEvents(t *testing.T) {
 	events1 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("65c4dce5-2935-46eb-a71e-3ea1cb4b970c")),
-			AggregateType: CommandsAggregate,
+			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
@@ -33,17 +33,17 @@ func TestWriteEvents(t *testing.T) {
 
 	expectedVersions := []int64{
 		1,
-		1,
-		2,
 		2,
 		3,
 		4,
+		5,
+		6,
 	}
 
 	events2 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("65c4dce5-2935-46eb-a71e-3ea1cb4b970c")),
-			AggregateType: CommandsAggregate,
+			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
@@ -117,8 +117,8 @@ func TestWriteEvents(t *testing.T) {
 func TestRestoreEvents(t *testing.T) {
 	events1 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("65c4dce5-2935-46eb-a71e-3ea1cb4b970c")),
-			AggregateType: CommandsAggregate,
+			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
@@ -135,17 +135,17 @@ func TestRestoreEvents(t *testing.T) {
 
 	expectedVersions := []int64{
 		1,
-		1,
-		2,
 		2,
 		3,
 		4,
+		5,
+		6,
 	}
 
 	events2 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("65c4dce5-2935-46eb-a71e-3ea1cb4b970c")),
-			AggregateType: CommandsAggregate,
+			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
