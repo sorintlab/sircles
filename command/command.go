@@ -1372,6 +1372,13 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 		}
 	}
 
+	if c.MatchUID != "" {
+		if len([]rune(c.MatchUID)) > MaxMemberMatchUID {
+			res.HasErrors = true
+			res.GenericError = errors.Errorf("matchUID too long")
+		}
+	}
+
 	var avatar []byte
 	if c.AvatarData != nil {
 		var err error
@@ -1402,11 +1409,11 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 
 	callingMemberID := util.NilID
 	if checkAuth {
-		// Only an admin can add members
 		callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 		if err != nil {
 			return nil, 0, err
 		}
+		// Only an admin can add members
 		if !callingMember.IsAdmin {
 			res.HasErrors = true
 			res.GenericError = errors.Errorf("member not authorized")
@@ -1430,6 +1437,18 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 		if c.Email == member.Email {
 			res.HasErrors = true
 			res.CreateMemberChangeErrors.Email = errors.Errorf("email already in use")
+		}
+	}
+
+	if c.MatchUID != "" {
+		// check that the member matchUID isn't already in use
+		member, err := s.readDB.MemberByMatchUIDInternal(c.MatchUID)
+		if err != nil {
+			return nil, 0, err
+		}
+		if member != nil {
+			res.HasErrors = true
+			res.GenericError = errors.Errorf("matchUID already in use")
 		}
 	}
 
@@ -1476,6 +1495,10 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 
 	if c.Password != "" {
 		events = events.AddEvent(eventstore.NewEventMemberPasswordSet(&correlationID, &commandCausationID, member.ID, passwordHash))
+	}
+
+	if c.MatchUID != "" {
+		events = events.AddEvent(eventstore.NewEventMemberMatchUIDSet(&correlationID, &commandCausationID, member.ID, c.MatchUID))
 	}
 
 	events = events.AddEvent(eventstore.NewEventCommandExecutionFinished(&correlationID, &commandCausationID, command))
@@ -1751,7 +1774,6 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 
 	callingMemberID := util.NilID
 	if !internal {
-		// Only the same user or an admin can set member password
 		callingMember, err := s.readDB.CallingMemberInternal(ctx, curTlSeq)
 		if err != nil {
 			return nil, err
