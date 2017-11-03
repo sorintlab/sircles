@@ -231,8 +231,6 @@ func (s *SearchEngine) HandlEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeCommandExecuted:
 	case eventstore.EventTypeCommandExecutionFinished:
 
-	case eventstore.EventTypeTimeLineCreated:
-
 	case eventstore.EventTypeRoleCreated:
 		data := event.Data.(*eventstore.EventRoleCreated)
 		reindexRoles = append(reindexRoles, data.RoleID)
@@ -353,7 +351,7 @@ func (s *SearchEngine) indexMembers(ids []util.ID) error {
 		return errors.Wrap(err, "cannot create db transaction")
 	}
 
-	curTlSeq := readDB.CurTimeLine().SequenceNumber
+	curTlSeq := readDB.CurTimeLine().Number()
 
 	searchMembers := map[util.ID]*Member{}
 
@@ -440,7 +438,7 @@ func (s *SearchEngine) indexRoles(ids []util.ID) error {
 		return errors.Wrap(err, "cannot create db transaction")
 	}
 
-	curTlSeq := readDB.CurTimeLine().SequenceNumber
+	curTlSeq := readDB.CurTimeLine().Number()
 
 	searchRoles := map[util.ID]*Role{}
 

@@ -11,9 +11,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/sorintlab/sircles/change"
 	"github.com/sorintlab/sircles/command"
+	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/readdb"
@@ -22,6 +24,10 @@ import (
 	graphql "github.com/neelance/graphql-go"
 	"github.com/satori/go.uuid"
 )
+
+func init() {
+	test = true
+}
 
 var rootQuery = `
 	query rootRoleQuery($timeLineID: TimeLineID) {
@@ -268,6 +274,10 @@ var circleMemberQuery = `
 
 type TestUIDGen struct{}
 
+func NewTestUIDGen() *TestUIDGen {
+	return &TestUIDGen{}
+}
+
 func (g *TestUIDGen) UUID(s string) util.ID {
 	if s == "" {
 		u := uuid.NewV4()
@@ -275,6 +285,19 @@ func (g *TestUIDGen) UUID(s string) util.ID {
 	}
 	u := uuid.NewV5(uuid.NamespaceDNS, s)
 	return util.NewFromUUID(u)
+}
+
+type TestTimeGenerator struct {
+	t time.Time
+}
+
+func NewTestTimeGenerator() *TestTimeGenerator {
+	return &TestTimeGenerator{t: time.Date(2017, 10, 26, 15, 16, 18, 00, time.UTC)}
+}
+
+func (tg *TestTimeGenerator) Now() time.Time {
+	tg.t = tg.t.Add(1 * time.Second)
+	return tg.t
 }
 
 func initRootRole(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDB, commandService *command.CommandService) {
@@ -400,7 +423,10 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 
 	pgConnString := os.Getenv("PG_CONNSTRING")
 
-	uidGenerator := &TestUIDGen{}
+	var uidGenerator command.UIDGenerator
+	var timeGenerator common.TimeGenerator
+	uidGenerator = NewTestUIDGen()
+	timeGenerator = NewTestTimeGenerator()
 
 	var tdb *db.DB
 
@@ -456,7 +482,7 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	commandService := command.NewCommandService(tx, readDB, uidGenerator, false)
+	commandService := command.NewCommandService(tx, readDB, uidGenerator, timeGenerator, false)
 
 	rootRoleID, err := commandService.SetupRootRole()
 	if err != nil {
@@ -492,18 +518,18 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 	}
 
 	if len(tests) == 1 {
-		RunTest(ctx, t, schema, tdb, uidGenerator, tests[0])
+		RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, tests[0])
 		return
 	}
 
 	for i, test := range tests {
 		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			RunTest(ctx, t, schema, tdb, uidGenerator, test)
+			RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, test)
 		})
 	}
 }
 
-func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.DB, uidGenerator command.UIDGenerator, test *Test) {
+func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.DB, uidGenerator command.UIDGenerator, tg common.TimeGenerator, test *Test) {
 	var variables map[string]interface{}
 	if len(test.Variables) > 0 {
 		if err := json.Unmarshal([]byte(test.Variables), &variables); err != nil {
@@ -519,7 +545,7 @@ func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.D
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	commandService := command.NewCommandService(tx, readDB, uidGenerator, false)
+	commandService := command.NewCommandService(tx, readDB, uidGenerator, tg, false)
 
 	ctx = context.WithValue(ctx, "service", readDB)
 	ctx = context.WithValue(ctx, "commandservice", commandService)
@@ -666,30 +692,30 @@ func TestTimeLines(t *testing.T) {
 			{
 				"timeLines": {
 					"edges": [
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjoxfQ==",
-							"timeLine": {
-								"id": 1
-							}
-						},
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjoyfQ==",
-							"timeLine": {
-								"id": 2
-							}
-						},
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjozfQ==",
-							"timeLine": {
-								"id": 3
-							}
-						},
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjo0fQ==",
-							"timeLine": {
-								"id": 4
-							}
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509030979000000000
 						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTk4MDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509030998000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDAzMDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509031003000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509031008000000000
+						}
+					}
 					],
 					"hasMoreData": true
 				}
@@ -713,39 +739,87 @@ func TestTimeLines(t *testing.T) {
 			Variables: `
 			{
 				"first": 4,
-				"after": "eyJUaW1lTGluZUlEIjo0fQ=="
+				"after": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwfQ=="
 			}
 			`,
 			ExpectedResult: `
 			{
 				"timeLines": {
 					"edges": [
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjo1fQ==",
-							"timeLine": {
-								"id": 5
-							}
-						},
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjo2fQ==",
-							"timeLine": {
-								"id": 6
-							}
-						},
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjo3fQ==",
-							"timeLine": {
-								"id": 7
-							}
-						},
-						{
-							"cursor": "eyJUaW1lTGluZUlEIjo4fQ==",
-							"timeLine": {
-								"id": 8
-							}
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDEzMDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509031013000000000
 						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDE4MDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509031018000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDIzMDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509031023000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDI4MDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509031028000000000
+						}
+					}
 					],
 					"hasMoreData": true
+				}
+			}
+			`,
+		},
+		{
+			Query: `
+				query timeLines($last: Int, $before: String) {
+					timeLines(last: $last, before: $before) {
+						edges {
+							timeLine {
+								id
+							}
+							cursor
+						}
+						hasMoreData
+					}
+				}
+			`,
+			Variables: `
+			{
+				"last": 4,
+				"before": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwfQ=="
+			}
+			`,
+			ExpectedResult: `
+			{
+				"timeLines": {
+					"edges": [
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDAzMDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509031003000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTk4MDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509030998000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwfQ==",
+						"timeLine": {
+							"id": 1509030979000000000
+						}
+					}
+					],
+					"hasMoreData": false
 				}
 			}
 			`,

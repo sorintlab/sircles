@@ -63,7 +63,7 @@ func FindMatchingMember(ctx context.Context, readDB readdb.ReadDB, matchUID stri
 	if member == nil {
 		// if we cannot find an user with matchUID try by username and accept it
 		// only if the returned member has an empty matchUID
-		member, err = readDB.MemberByUserName(ctx, readDB.CurTimeLine().SequenceNumber, matchUID)
+		member, err = readDB.MemberByUserName(ctx, readDB.CurTimeLine().Number(), matchUID)
 		if err != nil {
 			return nil, err
 		}

@@ -271,9 +271,9 @@ func doInit(tx *db.Tx, createInitialAdmin bool) error {
 	if err != nil {
 		return err
 	}
-	commandService := command.NewCommandService(tx, readDB, nil, false)
+	commandService := command.NewCommandService(tx, readDB, nil, nil, false)
 
-	if readDB.CurTimeLine().SequenceNumber != 0 {
+	if !readDB.CurTimeLine().IsZero() {
 		return nil
 	}
 

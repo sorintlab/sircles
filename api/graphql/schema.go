@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/sorintlab/sircles/auth"
@@ -23,6 +24,8 @@ import (
 	"github.com/satori/go.uuid"
 )
 
+var test bool
+
 var log = slog.S()
 
 // Schema is the GraphQL schema
@@ -37,7 +40,7 @@ var Schema = `
 		viewer(): Viewer!
 
 		timeLine(id: TimeLineID): TimeLine
-		timeLines(fromTime: Time, first: Int, after: TimeLineID): TimeLineConnection
+		timeLines(fromTime: Time, fromID: String, first: Int, last: Int, after: String, before: String): TimeLineConnection
 
 		rootRole(timeLineID: TimeLineID): Role
 		role(timeLineID: TimeLineID, uid: ID!): Role
@@ -603,7 +606,7 @@ func unmarshalUID(uid graphql.ID) (util.ID, error) {
 }
 
 type TimeLineCursor struct {
-	TimeLineID util.TimeLineSequenceNumber
+	TimeLineID util.TimeLineNumber
 }
 
 func marshalTimeLineCursor(c *TimeLineCursor) (string, error) {
@@ -627,7 +630,7 @@ func unmarshalTimeLineCursor(s string) (*TimeLineCursor, error) {
 }
 
 type MemberConnectionCursor struct {
-	TimeLineID   util.TimeLineSequenceNumber
+	TimeLineID   util.TimeLineNumber
 	SearchString string
 	FullName     string
 }
@@ -653,7 +656,7 @@ func unmarshalMemberConnectionCursor(s string) (*MemberConnectionCursor, error) 
 }
 
 type RoleEventConnectionCursor struct {
-	TimeLineID util.TimeLineSequenceNumber
+	TimeLineID util.TimeLineNumber
 }
 
 func marshalRoleEventConnectionCursor(c *RoleEventConnectionCursor) (string, error) {
@@ -1251,23 +1254,35 @@ func (t *CloseTensionChange) toCommandChange() (*change.CloseTensionChange, erro
 	return mt, nil
 }
 
-func getTimeLineSequenceNumber(readDB readdb.ReadDB, v *util.TimeLineSequenceNumber) (util.TimeLineSequenceNumber, error) {
+func getTimeLineNumber(readDB readdb.ReadDB, v *util.TimeLineNumber) (util.TimeLineNumber, error) {
 	curTl := readDB.CurTimeLine()
 
 	if v == nil {
-		return curTl.SequenceNumber, nil
+		return curTl.Number(), nil
 	}
 
 	timeLineID := *v
 	if timeLineID == 0 {
-		return curTl.SequenceNumber, nil
+		return curTl.Number(), nil
 	}
+
 	if timeLineID < 0 {
-		// a negative values means that we will use current timeLineID - request timeLineID
-		timeLineID = curTl.SequenceNumber + timeLineID
-		if timeLineID <= 0 {
+		if !test {
 			return 0, fmt.Errorf("invalid timeLineID %d", *v)
 		}
+
+		// TODO(sgotti) ugly hack used only for tests, should to be removed
+		// a negative values means that we will use current timeLineID - v
+
+		n := int(-*v)
+		tls, _, err := readDB.TimeLines(curTl.Number(), n, false)
+		if err != nil {
+			return 0, err
+		}
+		if len(tls) < n {
+			return 0, fmt.Errorf("invalid timeLineID %d", *v)
+		}
+		timeLineID = tls[n-1].Number()
 	}
 
 	return timeLineID, nil
@@ -1281,12 +1296,12 @@ func NewResolver() *Resolver {
 }
 
 func (r *Resolver) TimeLine(ctx context.Context, args *struct {
-	ID *util.TimeLineSequenceNumber
+	ID *util.TimeLineNumber
 }) (*timeLineResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
 
 	var tl *util.TimeLine
-	timeLineID, err := getTimeLineSequenceNumber(s, args.ID)
+	timeLineID, err := getTimeLineNumber(s, args.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -1306,33 +1321,64 @@ func (r *Resolver) TimeLine(ctx context.Context, args *struct {
 
 func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	FromTime *graphql.Time
+	FromID   *string
 	First    *float64
+	Last     *float64
 	After    *string
+	Before   *string
 }) (*timeLineConnectionResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
 
-	// accept only a cursor or a timeline + fromTime
-	if args.After != nil && args.FromTime != nil {
-		return nil, errors.New("only the cursor or the fromTime can be provided")
+	// accept only an After or a Before cursor
+	if args.After != nil && args.Before != nil {
+		return nil, errors.New("only one cursor can be provided")
+	}
+	// accept only a fromTime or fromID
+	if args.FromTime != nil && args.FromID != nil {
+		return nil, errors.New("only one of fromTime or fromID can be provided")
+	}
+	// accept only a cursor or a fromTime/fromID
+	if (args.After != nil || args.Before != nil) && (args.FromTime != nil || args.FromID != nil) {
+		return nil, errors.New("only the cursor or the fromTime/fromID can be provided")
+	}
+	// accept only a First or Last
+	if args.First != nil && args.Last != nil {
+		return nil, errors.New("only one of first or last can be provided")
 	}
 
-	var timeLineID util.TimeLineSequenceNumber
+	var timeLineID util.TimeLineNumber
 	var fromTime *time.Time
+	var fromID int64
+	var err error
 	if args.After != nil {
 		cursor, err := unmarshalTimeLineCursor(*args.After)
 		if err != nil {
 			return nil, err
 		}
 		timeLineID = cursor.TimeLineID
-
-	} else {
-		if args.FromTime != nil {
-			fromTime = &args.FromTime.Time
+	}
+	if args.Before != nil {
+		cursor, err := unmarshalTimeLineCursor(*args.Before)
+		if err != nil {
+			return nil, err
+		}
+		timeLineID = cursor.TimeLineID
+	}
+	if args.FromTime != nil {
+		fromTime = &args.FromTime.Time
+	}
+	if args.FromID != nil {
+		fromID, err = strconv.ParseInt(*args.FromID, 10, 64)
+		if err != nil {
+			return nil, err
 		}
 	}
-	first := 0
+	limit := 0
 	if args.First != nil {
-		first = int(*args.First)
+		limit = int(*args.First)
+	}
+	if args.Last != nil {
+		limit = int(*args.Last)
 	}
 
 	if fromTime != nil {
@@ -1340,10 +1386,16 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 		if err != nil {
 			return nil, err
 		}
-		timeLineID = startTimeLine.SequenceNumber - 1
+		if startTimeLine == nil {
+			startTimeLine = s.CurTimeLine()
+		}
+		timeLineID = startTimeLine.Number()
+	}
+	if fromID != 0 {
+		timeLineID = util.TimeLineNumber(fromID)
 	}
 
-	timeLines, hasMoreData, err := s.TimeLines(timeLineID, first)
+	timeLines, hasMoreData, err := s.TimeLines(timeLineID, limit, args.Last == nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1363,9 +1415,9 @@ func (r *Resolver) Viewer(ctx context.Context) (*viewerResolver, error) {
 	return &viewerResolver{s, member, tl, dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
-func (r *Resolver) RootRole(ctx context.Context, args *struct{ TimeLineID *util.TimeLineSequenceNumber }) (*roleResolver, error) {
+func (r *Resolver) RootRole(ctx context.Context, args *struct{ TimeLineID *util.TimeLineNumber }) (*roleResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
-	timeLineID, err := getTimeLineSequenceNumber(s, args.TimeLineID)
+	timeLineID, err := getTimeLineNumber(s, args.TimeLineID)
 	if err != nil {
 		return nil, err
 	}
@@ -1380,11 +1432,11 @@ func (r *Resolver) RootRole(ctx context.Context, args *struct{ TimeLineID *util.
 }
 
 func (r *Resolver) Role(ctx context.Context, args *struct {
-	TimeLineID *util.TimeLineSequenceNumber
+	TimeLineID *util.TimeLineNumber
 	UID        graphql.ID
 }) (*roleResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
-	timeLineID, err := getTimeLineSequenceNumber(s, args.TimeLineID)
+	timeLineID, err := getTimeLineNumber(s, args.TimeLineID)
 	if err != nil {
 		return nil, err
 	}
@@ -1404,11 +1456,11 @@ func (r *Resolver) Role(ctx context.Context, args *struct {
 }
 
 func (r *Resolver) Member(ctx context.Context, args *struct {
-	TimeLineID *util.TimeLineSequenceNumber
+	TimeLineID *util.TimeLineNumber
 	UID        graphql.ID
 }) (*memberResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
-	timeLineID, err := getTimeLineSequenceNumber(s, args.TimeLineID)
+	timeLineID, err := getTimeLineNumber(s, args.TimeLineID)
 	if err != nil {
 		return nil, err
 	}
@@ -1428,11 +1480,11 @@ func (r *Resolver) Member(ctx context.Context, args *struct {
 }
 
 func (r *Resolver) Tension(ctx context.Context, args *struct {
-	TimeLineID *util.TimeLineSequenceNumber
+	TimeLineID *util.TimeLineNumber
 	UID        graphql.ID
 }) (*tensionResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
-	timeLineID, err := getTimeLineSequenceNumber(s, args.TimeLineID)
+	timeLineID, err := getTimeLineNumber(s, args.TimeLineID)
 	if err != nil {
 		return nil, err
 	}
@@ -1452,7 +1504,7 @@ func (r *Resolver) Tension(ctx context.Context, args *struct {
 }
 
 func (r *Resolver) Members(ctx context.Context, args *struct {
-	TimeLineID *util.TimeLineSequenceNumber
+	TimeLineID *util.TimeLineNumber
 	Search     *string
 	First      *float64
 	After      *string
@@ -1464,7 +1516,7 @@ func (r *Resolver) Members(ctx context.Context, args *struct {
 		return nil, errors.New("only the cursor or the search and timeline can be provided")
 	}
 
-	var timeLineID util.TimeLineSequenceNumber
+	var timeLineID util.TimeLineNumber
 	var search string
 	var fullName *string
 	if args.After != nil {
@@ -1478,7 +1530,7 @@ func (r *Resolver) Members(ctx context.Context, args *struct {
 
 	} else {
 		var err error
-		timeLineID, err = getTimeLineSequenceNumber(s, args.TimeLineID)
+		timeLineID, err = getTimeLineNumber(s, args.TimeLineID)
 		if err != nil {
 			return nil, err
 		}
@@ -1499,9 +1551,9 @@ func (r *Resolver) Members(ctx context.Context, args *struct {
 	return &memberConnectionResolver{s, members, hasMoreData, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
-func (r *Resolver) Roles(ctx context.Context, args *struct{ TimeLineID *util.TimeLineSequenceNumber }) (*[]*roleResolver, error) {
+func (r *Resolver) Roles(ctx context.Context, args *struct{ TimeLineID *util.TimeLineNumber }) (*[]*roleResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
-	timeLineID, err := getTimeLineSequenceNumber(s, args.TimeLineID)
+	timeLineID, err := getTimeLineNumber(s, args.TimeLineID)
 	if err != nil {
 		return nil, err
 	}
@@ -1527,19 +1579,24 @@ func (r *Resolver) UpdateRootRole(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.UpdateRootRole(ctx, urc)
+	res, groupID, err := cs.UpdateRootRole(ctx, urc)
 	if err != nil && err != command.ErrValidation {
+		return nil, err
+	}
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
 		return nil, err
 	}
 
 	var role *models.Role
 	if err == nil {
-		role, err = s.Role(ctx, timeLineID, urc.ID)
+		role, err = s.Role(ctx, tl.Number(), urc.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateRootRoleResultResolver{s, role, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateRootRoleResultResolver{s, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) CircleCreateChildRole(ctx context.Context, args *struct {
@@ -1558,19 +1615,24 @@ func (r *Resolver) CircleCreateChildRole(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.CircleCreateChildRole(ctx, roleID, crc)
+	res, groupID, err := cs.CircleCreateChildRole(ctx, roleID, crc)
 	if err != nil && err != command.ErrValidation {
+		return nil, err
+	}
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
 		return nil, err
 	}
 
 	var role *models.Role
 	if err == nil && res.RoleID != nil {
-		role, err = s.Role(ctx, timeLineID, *res.RoleID)
+		role, err = s.Role(ctx, tl.Number(), *res.RoleID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &createRoleResultResolver{s, role, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &createRoleResultResolver{s, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) CircleUpdateChildRole(ctx context.Context, args *struct {
@@ -1589,19 +1651,24 @@ func (r *Resolver) CircleUpdateChildRole(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.CircleUpdateChildRole(ctx, roleID, urc)
+	res, groupID, err := cs.CircleUpdateChildRole(ctx, roleID, urc)
 	if err != nil && err != command.ErrValidation {
+		return nil, err
+	}
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
 		return nil, err
 	}
 
 	var role *models.Role
 	if err == nil {
-		role, err = s.Role(ctx, timeLineID, urc.ID)
+		role, err = s.Role(ctx, tl.Number(), urc.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateRoleResultResolver{s, role, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateRoleResultResolver{s, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) CircleDeleteChildRole(ctx context.Context, args *struct {
@@ -1620,11 +1687,17 @@ func (r *Resolver) CircleDeleteChildRole(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.CircleDeleteChildRole(ctx, roleID, drc)
+	res, groupID, err := cs.CircleDeleteChildRole(ctx, roleID, drc)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &deleteRoleResultResolver{s, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &deleteRoleResultResolver{s, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) SetRoleAdditionalContent(ctx context.Context, args *struct {
@@ -1639,13 +1712,18 @@ func (r *Resolver) SetRoleAdditionalContent(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.SetRoleAdditionalContent(ctx, roleID, args.Content)
+	res, groupID, err := cs.SetRoleAdditionalContent(ctx, roleID, args.Content)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
 
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
+		return nil, err
+	}
+
 	dataLoaders := dataloader.NewDataLoaders(ctx, s)
-	data, err := dataLoaders.Get(timeLineID).RoleAdditionalContent.Load(roleID.String())()
+	data, err := dataLoaders.Get(tl.Number()).RoleAdditionalContent.Load(roleID.String())()
 	if err != nil {
 		return nil, err
 	}
@@ -1653,7 +1731,7 @@ func (r *Resolver) SetRoleAdditionalContent(ctx context.Context, args *struct {
 	if err != nil {
 		return nil, err
 	}
-	return &setRoleAdditionalContentResultResolver{s, roleAdditionalContent, res, timeLineID, dataLoaders}, nil
+	return &setRoleAdditionalContentResultResolver{s, roleAdditionalContent, res, tl.Number(), dataLoaders}, nil
 }
 
 func (r *Resolver) CreateMember(ctx context.Context, args *struct {
@@ -1672,19 +1750,24 @@ func (r *Resolver) CreateMember(ctx context.Context, args *struct {
 		mr.AvatarData.Avatar = avatar.([]byte)
 	}
 
-	res, timeLineID, err := cs.CreateMember(ctx, mr)
+	res, groupID, err := cs.CreateMember(ctx, mr)
 	if err != nil && err != command.ErrValidation {
+		return nil, err
+	}
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
 		return nil, err
 	}
 
 	var member *models.Member
 	if err == nil && res.MemberID != nil {
-		member, err = s.Member(ctx, timeLineID, *res.MemberID)
+		member, err = s.Member(ctx, tl.Number(), *res.MemberID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &createMemberResultResolver{s, member, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &createMemberResultResolver{s, member, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) UpdateMember(ctx context.Context, args *struct {
@@ -1703,19 +1786,24 @@ func (r *Resolver) UpdateMember(ctx context.Context, args *struct {
 		mr.AvatarData.Avatar = avatar.([]byte)
 	}
 
-	res, timeLineID, err := cs.UpdateMember(ctx, mr)
+	res, groupID, err := cs.UpdateMember(ctx, mr)
 	if err != nil && err != command.ErrValidation {
+		return nil, err
+	}
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
 		return nil, err
 	}
 
 	var member *models.Member
 	if err == nil {
-		member, err = s.Member(ctx, timeLineID, mr.ID)
+		member, err = s.Member(ctx, tl.Number(), mr.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateMemberResultResolver{s, member, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateMemberResultResolver{s, member, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) SetMemberPassword(ctx context.Context, args *struct {
@@ -1766,8 +1854,8 @@ func (r *Resolver) ImportMember(ctx context.Context, args *struct {
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	memberProvider := ctx.Value("memberprovider").(auth.MemberProvider)
 
-	sn := util.TimeLineSequenceNumber(0)
-	timeLineID, err := getTimeLineSequenceNumber(s, &sn)
+	sn := util.TimeLineNumber(0)
+	timeLineID, err := getTimeLineNumber(s, &sn)
 	if err != nil {
 		return nil, err
 	}
@@ -1789,19 +1877,24 @@ func (r *Resolver) CreateTension(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.CreateTension(ctx, mr)
+	res, groupID, err := cs.CreateTension(ctx, mr)
 	if err != nil && err != command.ErrValidation {
+		return nil, err
+	}
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
 		return nil, err
 	}
 
 	var tension *models.Tension
 	if err == nil && res.TensionID != nil {
-		tension, err = s.Tension(ctx, timeLineID, *res.TensionID)
+		tension, err = s.Tension(ctx, tl.Number(), *res.TensionID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &createTensionResultResolver{s, tension, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &createTensionResultResolver{s, tension, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) UpdateTension(ctx context.Context, args *struct {
@@ -1814,19 +1907,24 @@ func (r *Resolver) UpdateTension(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.UpdateTension(ctx, mr)
+	res, groupID, err := cs.UpdateTension(ctx, mr)
 	if err != nil && err != command.ErrValidation {
+		return nil, err
+	}
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
 		return nil, err
 	}
 
 	var tension *models.Tension
 	if err == nil {
-		tension, err = s.Tension(ctx, timeLineID, mr.ID)
+		tension, err = s.Tension(ctx, tl.Number(), mr.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateTensionResultResolver{s, tension, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateTensionResultResolver{s, tension, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) CloseTension(ctx context.Context, args *struct {
@@ -1839,11 +1937,17 @@ func (r *Resolver) CloseTension(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, timeLineID, err := cs.CloseTension(ctx, mr)
+	res, groupID, err := cs.CloseTension(ctx, mr)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
-	return &closeTensionResultResolver{s, res, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
+
+	tl, err := s.TimeLineForGroupID(groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &closeTensionResultResolver{s, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) CircleSetLeadLinkMember(ctx context.Context, args *struct {

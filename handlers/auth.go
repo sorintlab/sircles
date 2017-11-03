@@ -134,7 +134,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	commandService := command.NewCommandService(tx, readDB, nil, h.memberProvider != nil)
+	commandService := command.NewCommandService(tx, readDB, nil, nil, h.memberProvider != nil)
 
 	// find a matching member using the matchUID reported by the authenticator
 	member, err := auth.FindMatchingMember(ctx, readDB, matchUID)
@@ -378,7 +378,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	member, err := readDB.MemberInternal(readDB.CurTimeLine().SequenceNumber, util.NewFromUUID(userID))
+	member, err := readDB.MemberInternal(readDB.CurTimeLine().Number(), util.NewFromUUID(userID))
 	if err != nil {
 		tx.Rollback()
 		log.Errorf("auth err: %v", err)

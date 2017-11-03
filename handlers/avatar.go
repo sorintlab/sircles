@@ -84,7 +84,7 @@ func (h *avatarHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	avatar, err := readDB.MemberAvatarInternal(readDB.CurTimeLine().SequenceNumber, memberid)
+	avatar, err := readDB.MemberAvatarInternal(readDB.CurTimeLine().Number(), memberid)
 	if err != nil {
 		log.Errorf("err: %v", err)
 		http.Error(w, "", http.StatusInternalServerError)
