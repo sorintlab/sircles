@@ -32,7 +32,7 @@ type ReadDB interface {
 	// Queries
 	CurTimeLine() *util.TimeLine
 	TimeLine(util.TimeLineNumber) (*util.TimeLine, error)
-	TimeLines(tl util.TimeLineNumber, limit int, after bool) ([]*util.TimeLine, bool, error)
+	TimeLines(ts *time.Time, tl util.TimeLineNumber, limit int, after bool, aggregateType string, aggregateID *util.ID) ([]*util.TimeLine, bool, error)
 	TimeLineAtTimeStamp(time.Time) (*util.TimeLine, error)
 	TimeLineForGroupID(groupID util.ID) (*util.TimeLine, error)
 
@@ -1381,21 +1381,37 @@ func (s *DBService) TimeLineForGroupID(groupID util.ID) (*util.TimeLine, error) 
 	return &tl, err
 }
 
-func (s *DBService) TimeLines(sn util.TimeLineNumber, limit int, after bool) ([]*util.TimeLine, bool, error) {
+func (s *DBService) TimeLines(ts *time.Time, sn util.TimeLineNumber, limit int, after bool, aggregateType string, aggregateID *util.ID) ([]*util.TimeLine, bool, error) {
 	var tls []*util.TimeLine
 	if limit <= 0 {
 		limit = MaxFetchSize
 	}
+	if ts == nil {
+		t := time.Unix(0, int64(sn)).UTC()
+		ts = &t
+	}
+	sb := sb.Select("timestamp").From("timeline")
+	// ask for limit + 1 rows to know if there's more data
+	if after {
+		sb = sb.Where(sq.Gt{"timestamp": ts}).OrderBy("timestamp asc")
+	} else {
+		sb = sb.Where(sq.Lt{"timestamp": ts}).OrderBy("timestamp desc")
+	}
+	sb = sb.Limit(uint64(limit + 1))
 
-	err := s.tx.Do(func(tx *db.WrappedTx) error {
-		var q string
-		// ask for limit + 1 rows to know if there's more data
-		if after {
-			q = "select timestamp from timeline where timestamp > $1 order by timestamp asc limit $2"
-		} else {
-			q = "select timestamp from timeline where timestamp < $1 order by timestamp desc limit $2"
-		}
-		rows, err := tx.Query(q, time.Unix(0, int64(sn)), limit+1)
+	if aggregateType != "" {
+		sb = sb.Where(sq.Eq{"aggregatetype": aggregateType})
+	}
+	if aggregateID != nil {
+		sb = sb.Where(sq.Eq{"aggregateid": aggregateID})
+	}
+
+	q, args, err := sb.ToSql()
+	if err != nil {
+		return nil, false, errors.Wrap(err, "failed to build query")
+	}
+	err = s.tx.Do(func(tx *db.WrappedTx) error {
+		rows, err := tx.Query(q, args...)
 		if err != nil {
 			return err
 		}
@@ -2599,7 +2615,7 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 		err := s.tx.Do(func(tx *db.WrappedTx) error {
-			if _, err := tx.Exec("insert into timeline (timestamp, groupid) values ($1, $2)", tl.Timestamp, event.GroupID.UUID); err != nil {
+			if _, err := tx.Exec("insert into timeline (timestamp, groupid, aggregatetype, aggregateid) values ($1, $2, $3, $4)", tl.Timestamp, event.GroupID.UUID, event.AggregateType, event.AggregateID); err != nil {
 				return errors.Wrap(err, "failed to insert timeline")
 			}
 			return nil

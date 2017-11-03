@@ -40,7 +40,7 @@ var Schema = `
 		viewer(): Viewer!
 
 		timeLine(id: TimeLineID): TimeLine
-		timeLines(fromTime: Time, fromID: String, first: Int, last: Int, after: String, before: String): TimeLineConnection
+		timeLines(fromTime: Time, fromID: String, first: Int, last: Int, after: String, before: String, aggregateType: String, aggregateID: ID): TimeLineConnection
 
 		rootRole(timeLineID: TimeLineID): Role
 		role(timeLineID: TimeLineID, uid: ID!): Role
@@ -1275,7 +1275,7 @@ func getTimeLineNumber(readDB readdb.ReadDB, v *util.TimeLineNumber) (util.TimeL
 		// a negative values means that we will use current timeLineID - v
 
 		n := int(-*v)
-		tls, _, err := readDB.TimeLines(curTl.Number(), n, false)
+		tls, _, err := readDB.TimeLines(nil, curTl.Number(), n, false, "", nil)
 		if err != nil {
 			return 0, err
 		}
@@ -1320,12 +1320,14 @@ func (r *Resolver) TimeLine(ctx context.Context, args *struct {
 }
 
 func (r *Resolver) TimeLines(ctx context.Context, args *struct {
-	FromTime *graphql.Time
-	FromID   *string
-	First    *float64
-	Last     *float64
-	After    *string
-	Before   *string
+	FromTime      *graphql.Time
+	FromID        *string
+	First         *float64
+	Last          *float64
+	After         *string
+	Before        *string
+	AggregateType *string
+	AggregateID   *graphql.ID
 }) (*timeLineConnectionResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
 
@@ -1349,6 +1351,8 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	var timeLineID util.TimeLineNumber
 	var fromTime *time.Time
 	var fromID int64
+	var aggregateType string
+	var aggregateID *util.ID
 	var err error
 	if args.After != nil {
 		cursor, err := unmarshalTimeLineCursor(*args.After)
@@ -1380,22 +1384,22 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	if args.Last != nil {
 		limit = int(*args.Last)
 	}
-
-	if fromTime != nil {
-		startTimeLine, err := s.TimeLineAtTimeStamp(*fromTime)
+	if args.AggregateType != nil {
+		aggregateType = *args.AggregateType
+	}
+	if args.AggregateID != nil {
+		id, err := unmarshalUID(*args.AggregateID)
 		if err != nil {
 			return nil, err
 		}
-		if startTimeLine == nil {
-			startTimeLine = s.CurTimeLine()
-		}
-		timeLineID = startTimeLine.Number()
+		aggregateID = &id
 	}
+
 	if fromID != 0 {
 		timeLineID = util.TimeLineNumber(fromID)
 	}
 
-	timeLines, hasMoreData, err := s.TimeLines(timeLineID, limit, args.Last == nil)
+	timeLines, hasMoreData, err := s.TimeLines(fromTime, timeLineID, limit, args.Last == nil, aggregateType, aggregateID)
 	if err != nil {
 		return nil, err
 	}
