@@ -77,8 +77,8 @@ const timeLineQuery = gql`
 `
 
 const timeLineAfter = gql`
-  query timeLineFromTime($fromID: String) {
-    timeLines(first: 1, fromID: $fromID) {
+  query timeLineAfterTime($fromID: String) {
+    timeLines(first: 1, aggregateType: "rolestree", fromID: $fromID) {
       edges {
         timeLine {
           id
@@ -90,8 +90,8 @@ const timeLineAfter = gql`
 `
 
 const timeLineBefore = gql`
-  query timeLineFromTime($fromID: String) {
-    timeLines(last: 1, fromID: $fromID) {
+  query timeLineBeforeTime($fromID: String) {
+    timeLines(last: 1, aggregateType: "rolestree", fromID: $fromID) {
       edges {
         timeLine {
           id
