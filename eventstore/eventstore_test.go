@@ -70,6 +70,9 @@ func TestWriteEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	tx, err := db.NewTx()
 	if err != nil {
@@ -172,6 +175,9 @@ func TestRestoreEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if err := db1.Migrate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	tx, err := db1.NewTx()
 	if err != nil {
@@ -203,6 +209,9 @@ func TestRestoreEvents(t *testing.T) {
 
 	db2, err := db.NewDB("sqlite3", dbpath)
 	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := db2.Migrate(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

@@ -68,6 +68,11 @@ func restore(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Populate/migrate db
+	if err := db.Migrate(); err != nil {
+		return err
+	}
+
 	tx, err := db.NewTx()
 	if err != nil {
 		return err

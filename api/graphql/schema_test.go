@@ -466,6 +466,11 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 		log.Fatalf("unknown db type")
 	}
 
+	// Populate/migrate db
+	if err := tdb.Migrate(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	defer tdb.Close()
 
 	resolver := NewResolver()

@@ -129,11 +129,6 @@ func NewDB(dbType, dbConnString string) (*DB, error) {
 		t:  t,
 	}
 
-	// Populate/migrate db
-	if err := db.migrate(); err != nil {
-		return nil, err
-	}
-
 	return db, nil
 }
 
