@@ -112,8 +112,10 @@ var migrations = []migration{
 			// we can end with different "events" happening at the same time
 			// (with millisecond precision for postgres), so timestamp cannot be
 			// unique.
-			"create table timeline (timestamp timestamptz not null, groupid uuid, PRIMARY KEY(groupid))",
+			"create table timeline (timestamp timestamptz not null, groupid uuid, aggregatetype varchar, aggregateid uuid, PRIMARY KEY(groupid))",
 			"create index timeline_ts on timeline(timestamp)",
+			"create index timeline_aggregatetype on timeline(aggregatetype)",
+			"create index timeline_aggregateid on timeline(aggregateid)",
 
 			// role is a one to many relation with child roles so it could be represented
 			// in the child role with a parent id. But, since we are implementing a time
