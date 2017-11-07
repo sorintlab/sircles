@@ -9,20 +9,26 @@ import Util from '../modules/Util'
 
 class TimeTravel extends React.Component {
   componentWillReceiveProps (nextProps) {
-    const { timeLineFromTimeQuery, curTimeLineQuery } = nextProps
+    const { timeLineAfterTimeQuery, timeLineBeforeTimeQuery, curTimeLineQuery } = nextProps
 
-    if (Util.isQueriesError(timeLineFromTimeQuery, curTimeLineQuery)) {
+    if (Util.isQueriesError(timeLineAfterTimeQuery, timeLineBeforeTimeQuery, curTimeLineQuery)) {
       this.props.appError.setError(true)
       return
     }
 
-    if (Util.isQueriesLoading(timeLineFromTimeQuery, curTimeLineQuery)) {
+    if (Util.isQueriesLoading(timeLineAfterTimeQuery, timeLineBeforeTimeQuery, curTimeLineQuery)) {
       return
     }
 
     let timeLineID = curTimeLineQuery.timeLine.id
-    if (timeLineFromTimeQuery.timeLines.edges[0]) {
-      timeLineID = timeLineFromTimeQuery.timeLines.edges[0].timeLine.id
+    if (timeLineAfterTimeQuery.timeLines.edges.length > 0) {
+      if (timeLineAfterTimeQuery.timeLines.edges[0]) {
+        timeLineID = timeLineAfterTimeQuery.timeLines.edges[0].timeLine.id
+      }
+    } else if (timeLineBeforeTimeQuery.timeLines.edges.length > 0) {
+      if (timeLineBeforeTimeQuery.timeLines.edges[0]) {
+        timeLineID = timeLineBeforeTimeQuery.timeLines.edges[0].timeLine.id
+      }
     }
 
     this.props.history.push(`/timeline/${timeLineID}`)
@@ -31,17 +37,13 @@ class TimeTravel extends React.Component {
   render () {
     console.log('props', this.props)
 
-    const { timeLineFromTimeQuery } = this.props
+    const { timeLineAfterTimeQuery, timeLineBeforeTimeQuery, curTimeLineQuery } = this.props
 
-    if (!timeLineFromTimeQuery) {
+    if (Util.isQueriesError(timeLineAfterTimeQuery, timeLineBeforeTimeQuery, curTimeLineQuery)) {
       return null
     }
 
-    if (Util.isQueriesError(timeLineFromTimeQuery, curTimeLineQuery)) {
-      return null
-    }
-
-    if (Util.isQueriesLoading(timeLineFromTimeQuery, curTimeLineQuery)) {
+    if (Util.isQueriesLoading(timeLineAfterTimeQuery, timeLineBeforeTimeQuery, curTimeLineQuery)) {
       return (
         <Dimmer active inverted>
           <Loader inverted>Loading</Loader>
@@ -53,9 +55,21 @@ class TimeTravel extends React.Component {
   }
 }
 
-const timeLineFromTimeQuery = gql`
-  query timeLineFromTime($fromTime: Time) {
-    timeLines(first: 1, fromTime: $fromTime) {
+const timeLineAfterTimeQuery = gql`
+  query timeLineAfterTime($fromTime: Time) {
+    timeLines(first: 1, aggregateType: "rolestree", fromTime: $fromTime) {
+      edges {
+        timeLine {
+          id
+        }
+      }
+    }
+  }
+`
+
+const timeLineBeforeTimeQuery = gql`
+  query timeLineBeforeTime($fromTime: Time) {
+    timeLines(last: 1, aggregateType: "rolestree", fromTime: $fromTime) {
       edges {
         timeLine {
           id
@@ -81,8 +95,17 @@ graphql(curTimeLineQuery, {
     fetchPolicy: 'network-only'
   })
 }),
-graphql(timeLineFromTimeQuery, {
-  name: 'timeLineFromTimeQuery',
+graphql(timeLineAfterTimeQuery, {
+  name: 'timeLineAfterTimeQuery',
+  options: props => ({
+    variables: {
+      fromTime: props.day
+    },
+    fetchPolicy: 'network-only'
+  })
+}),
+graphql(timeLineBeforeTimeQuery, {
+  name: 'timeLineBeforeTimeQuery',
   options: props => ({
     variables: {
       fromTime: props.day
