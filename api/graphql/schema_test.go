@@ -409,14 +409,14 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	var dbType string
+	var dbType db.Type
 	switch os.Getenv("DB_TYPE") {
 	case "":
-		dbType = "sqlite3"
+		dbType = db.Sqlite3
 	case "sqlite3":
-		dbType = "sqlite3"
+		dbType = db.Sqlite3
 	case "postgres":
-		dbType = "postgres"
+		dbType = db.Postgres
 	default:
 		log.Fatalf("unknown db type")
 	}

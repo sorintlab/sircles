@@ -16,8 +16,16 @@ import (
 
 var log = slog.S()
 
-type DBType struct {
-	name              string
+type Type string
+
+const (
+	Sqlite3     Type = "sqlite3"
+	Postgres    Type = "postgres"
+	CockRoachDB Type = "cockroachdb"
+)
+
+type dbData struct {
+	t                 Type
 	queryReplacers    []replacer
 	supportsTimezones bool
 }
@@ -35,13 +43,13 @@ func matchLiteral(s string) *regexp.Regexp {
 }
 
 var (
-	dbTypePostgres = DBType{
-		name:              "postgres",
+	dbDataPostgres = dbData{
+		t:                 Postgres,
 		supportsTimezones: true,
 	}
 
-	dbTypeSQLite3 = DBType{
-		name:              "sqlite3",
+	dbDataSQLite3 = dbData{
+		t:                 Sqlite3,
 		supportsTimezones: false,
 		queryReplacers: []replacer{
 			{bindRegexp, "?"},
@@ -56,8 +64,8 @@ var (
 		},
 	}
 
-	dbTypeCockroachDB = DBType{
-		name:              "cockroachdb",
+	dbDataCockroachDB = dbData{
+		t:                 CockRoachDB,
 		supportsTimezones: false,
 		queryReplacers: []replacer{
 			{matchLiteral("uuid"), "bytea"},
@@ -65,7 +73,7 @@ var (
 	}
 )
 
-func (t DBType) translate(query string) string {
+func (t dbData) translate(query string) string {
 	for _, r := range t.queryReplacers {
 		query = r.re.ReplaceAllString(query, r.with)
 	}
@@ -75,7 +83,7 @@ func (t DBType) translate(query string) string {
 // translateArgs translates query parameters that may be unique to
 // a specific SQL flavor. For example, standardizing "time.Time"
 // types to UTC for clients that don't provide timezone support.
-func (t DBType) translateArgs(args []interface{}) []interface{} {
+func (t dbData) translateArgs(args []interface{}) []interface{} {
 	if t.supportsTimezones {
 		return args
 	}
@@ -90,24 +98,24 @@ func (t DBType) translateArgs(args []interface{}) []interface{} {
 
 // DB wraps a sql.DB to add special behaviors based on the db type
 type DB struct {
-	db *sql.DB
-	t  DBType
+	db   *sql.DB
+	data dbData
 }
 
-func NewDB(dbType, dbConnString string) (*DB, error) {
-	var t DBType
+func NewDB(dbType Type, dbConnString string) (*DB, error) {
+	var data dbData
 	var driverName string
 	switch dbType {
-	case "postgres":
-		t = dbTypePostgres
+	case Postgres:
+		data = dbDataPostgres
 		driverName = "postgres"
 		// TODO(sgotti) see migration problems with cockroachdb. For the moment we don't accept it as a valid db
-	case "cockroachdb":
-		t = dbTypeCockroachDB
+	case CockRoachDB:
+		data = dbDataCockroachDB
 		driverName = "postgres"
 		return nil, errors.New("cockroachdb currently not supported")
-	case "sqlite3":
-		t = dbTypeSQLite3
+	case Sqlite3:
+		data = dbDataSQLite3
 		driverName = "sqlite3"
 	default:
 		return nil, errors.New("unknown db type")
@@ -119,14 +127,14 @@ func NewDB(dbType, dbConnString string) (*DB, error) {
 	}
 
 	switch dbType {
-	case "sqlite3":
+	case Sqlite3:
 		sqldb.Exec("PRAGMA foreign_keys = ON")
 		sqldb.Exec("PRAGMA journal_mode = WAL")
 	}
 
 	db := &DB{
-		db: sqldb,
-		t:  t,
+		db:   sqldb,
+		data: data,
 	}
 
 	// Populate/migrate db
@@ -143,14 +151,13 @@ func NewDB(dbType, dbConnString string) (*DB, error) {
 type Tx struct {
 	wrappedTx *WrappedTx
 	l         sync.Mutex
-	doing     bool
 }
 
 // WrappedTx wraps a sql.Tx to apply some statement mutations before executing
 // it
 type WrappedTx struct {
-	tx *sql.Tx
-	t  DBType
+	tx   *sql.Tx
+	data dbData
 }
 
 func (db *DB) Close() error {
@@ -162,8 +169,8 @@ func (db *DB) NewTx() (*Tx, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch db.t.name {
-	case "postgres":
+	switch db.data.t {
+	case Postgres:
 		if _, err := tx.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
 			return nil, err
 		}
@@ -171,7 +178,7 @@ func (db *DB) NewTx() (*Tx, error) {
 
 	return &Tx{
 		wrappedTx: &WrappedTx{
-			tx: tx, t: db.t,
+			tx: tx, data: db.data,
 		},
 	}, nil
 }
@@ -193,21 +200,21 @@ func (tx *Tx) Rollback() error {
 }
 
 func (tx *WrappedTx) Exec(query string, args ...interface{}) (sql.Result, error) {
-	query = tx.t.translate(query)
+	query = tx.data.translate(query)
 	log.Debugf("query: %s, args: %v", query, args)
-	return tx.tx.Exec(query, tx.t.translateArgs(args)...)
+	return tx.tx.Exec(query, tx.data.translateArgs(args)...)
 }
 
 func (tx *WrappedTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	query = tx.t.translate(query)
+	query = tx.data.translate(query)
 	log.Debugf("query: %s, args: %v", query, args)
-	return tx.tx.Query(query, tx.t.translateArgs(args)...)
+	return tx.tx.Query(query, tx.data.translateArgs(args)...)
 }
 
 func (tx *WrappedTx) QueryRow(query string, args ...interface{}) *sql.Row {
-	query = tx.t.translate(query)
+	query = tx.data.translate(query)
 	log.Debugf("query: %s, args: %v", query, args)
-	return tx.tx.QueryRow(query, tx.t.translateArgs(args)...)
+	return tx.tx.QueryRow(query, tx.data.translateArgs(args)...)
 }
 
 func (tx *Tx) Do(f func(tx *WrappedTx) error) error {
@@ -220,16 +227,16 @@ func (tx *Tx) CurTime() (time.Time, error) {
 	tx.lock()
 	defer tx.unlock()
 
-	switch tx.wrappedTx.t.name {
-	case "sqlite3":
+	switch tx.wrappedTx.data.t {
+	case Sqlite3:
 		var timestring string
 		if err := tx.wrappedTx.QueryRow("select now()").Scan(&timestring); err != nil {
 			return time.Time{}, err
 		}
 		return time.ParseInLocation("2006-01-02 15:04:05.999999999", timestring, time.UTC)
-	case "postgres":
+	case Postgres:
 		fallthrough
-	case "cockroachdb":
+	case CockRoachDB:
 		var now time.Time
 		if err := tx.wrappedTx.QueryRow("select now()").Scan(&now); err != nil {
 			return time.Time{}, err

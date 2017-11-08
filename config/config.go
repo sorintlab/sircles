@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/ghodss/yaml"
+	"github.com/sorintlab/sircles/db"
 )
 
 func Parse(configFile string) (*Config, error) {
@@ -78,8 +79,8 @@ type Web struct {
 }
 
 type DB struct {
-	Type       string `json:"type"`
-	ConnString string `json:"connString"`
+	Type       db.Type `json:"type"`
+	ConnString string  `json:"connString"`
 }
 
 type Index struct {
