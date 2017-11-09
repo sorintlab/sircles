@@ -606,7 +606,9 @@ func unmarshalUID(uid graphql.ID) (util.ID, error) {
 }
 
 type TimeLineCursor struct {
-	TimeLineID util.TimeLineNumber
+	TimeLineID    util.TimeLineNumber
+	AggregateType string
+	AggregateID   *util.ID
 }
 
 func marshalTimeLineCursor(c *TimeLineCursor) (string, error) {
@@ -1322,12 +1324,12 @@ func (r *Resolver) TimeLine(ctx context.Context, args *struct {
 func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	FromTime      *graphql.Time
 	FromID        *string
+	AggregateType *string
+	AggregateID   *graphql.ID
 	First         *float64
 	Last          *float64
 	After         *string
 	Before        *string
-	AggregateType *string
-	AggregateID   *graphql.ID
 }) (*timeLineConnectionResolver, error) {
 	s := ctx.Value("service").(readdb.ReadDB)
 
@@ -1339,9 +1341,9 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	if args.FromTime != nil && args.FromID != nil {
 		return nil, errors.New("only one of fromTime or fromID can be provided")
 	}
-	// accept only a cursor or a fromTime/fromID
-	if (args.After != nil || args.Before != nil) && (args.FromTime != nil || args.FromID != nil) {
-		return nil, errors.New("only the cursor or the fromTime/fromID can be provided")
+	// accept only a cursor or a fromTime/fromID/AggregateType/AggregateID
+	if (args.After != nil || args.Before != nil) && (args.FromTime != nil || args.FromID != nil || args.AggregateType != nil || args.AggregateID != nil) {
+		return nil, errors.New("only the cursor or the fromTime/fromID/AggregateType/AggregateID can be provided")
 	}
 	// accept only a First or Last
 	if args.First != nil && args.Last != nil {
@@ -1354,12 +1356,25 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	var aggregateType string
 	var aggregateID *util.ID
 	var err error
+
+	if args.AggregateType != nil {
+		aggregateType = *args.AggregateType
+	}
+	if args.AggregateID != nil {
+		id, err := unmarshalUID(*args.AggregateID)
+		if err != nil {
+			return nil, err
+		}
+		aggregateID = &id
+	}
 	if args.After != nil {
 		cursor, err := unmarshalTimeLineCursor(*args.After)
 		if err != nil {
 			return nil, err
 		}
 		timeLineID = cursor.TimeLineID
+		aggregateType = cursor.AggregateType
+		aggregateID = cursor.AggregateID
 	}
 	if args.Before != nil {
 		cursor, err := unmarshalTimeLineCursor(*args.Before)
@@ -1367,6 +1382,8 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 			return nil, err
 		}
 		timeLineID = cursor.TimeLineID
+		aggregateType = cursor.AggregateType
+		aggregateID = cursor.AggregateID
 	}
 	if args.FromTime != nil {
 		fromTime = &args.FromTime.Time
@@ -1384,16 +1401,6 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	if args.Last != nil {
 		limit = int(*args.Last)
 	}
-	if args.AggregateType != nil {
-		aggregateType = *args.AggregateType
-	}
-	if args.AggregateID != nil {
-		id, err := unmarshalUID(*args.AggregateID)
-		if err != nil {
-			return nil, err
-		}
-		aggregateID = &id
-	}
 
 	if fromID != 0 {
 		timeLineID = util.TimeLineNumber(fromID)
@@ -1404,7 +1411,7 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	return &timeLineConnectionResolver{s, timeLines, hasMoreData, dataloader.NewDataLoaders(ctx, s)}, nil
+	return &timeLineConnectionResolver{s, timeLines, aggregateType, aggregateID, hasMoreData, dataloader.NewDataLoaders(ctx, s)}, nil
 }
 
 func (r *Resolver) Viewer(ctx context.Context) (*viewerResolver, error) {

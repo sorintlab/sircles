@@ -9,9 +9,11 @@ import (
 )
 
 type timeLineConnectionResolver struct {
-	s           readdb.ReadDB
-	timeLines   []*util.TimeLine
-	hasMoreData bool
+	s             readdb.ReadDB
+	timeLines     []*util.TimeLine
+	aggregateType string
+	aggregateID   *util.ID
+	hasMoreData   bool
 
 	dataLoaders *dataloader.DataLoaders
 }
@@ -23,20 +25,22 @@ func (r *timeLineConnectionResolver) HasMoreData() bool {
 func (r *timeLineConnectionResolver) Edges() *[]*timeLineEdgeResolver {
 	l := make([]*timeLineEdgeResolver, len(r.timeLines))
 	for i, timeLine := range r.timeLines {
-		l[i] = &timeLineEdgeResolver{r.s, timeLine, r.dataLoaders}
+		l[i] = &timeLineEdgeResolver{r.s, timeLine, r.aggregateType, r.aggregateID, r.dataLoaders}
 	}
 	return &l
 }
 
 type timeLineEdgeResolver struct {
-	s        readdb.ReadDB
-	timeLine *util.TimeLine
+	s             readdb.ReadDB
+	timeLine      *util.TimeLine
+	aggregateType string
+	aggregateID   *util.ID
 
 	dataLoaders *dataloader.DataLoaders
 }
 
 func (r *timeLineEdgeResolver) Cursor() (string, error) {
-	return marshalTimeLineCursor(&TimeLineCursor{TimeLineID: r.timeLine.Number()})
+	return marshalTimeLineCursor(&TimeLineCursor{TimeLineID: r.timeLine.Number(), AggregateType: r.aggregateType, AggregateID: r.aggregateID})
 }
 
 func (r *timeLineEdgeResolver) TimeLine() *timeLineResolver {

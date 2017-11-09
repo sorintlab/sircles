@@ -698,25 +698,25 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509030979000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTk4MDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTk4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509030998000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDAzMDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDAzMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509031003000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509031008000000000
 						}
@@ -744,7 +744,7 @@ func TestTimeLines(t *testing.T) {
 			Variables: `
 			{
 				"first": 4,
-				"after": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwfQ=="
+				"after": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9"
 			}
 			`,
 			ExpectedResult: `
@@ -752,25 +752,25 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDEzMDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDEzMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509031013000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDE4MDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDE4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509031018000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDIzMDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDIzMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509031023000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDI4MDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDI4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509031028000000000
 						}
@@ -798,7 +798,7 @@ func TestTimeLines(t *testing.T) {
 			Variables: `
 			{
 				"last": 4,
-				"before": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwfQ=="
+				"before": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDA4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9"
 			}
 			`,
 			ExpectedResult: `
@@ -806,19 +806,177 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDAzMDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDAzMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509031003000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTk4MDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTk4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509030998000000000
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwfQ==",
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoiIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509030979000000000
+						}
+					}
+					],
+					"hasMoreData": false
+				}
+			}
+			`,
+		},
+	})
+	RunTests(t, initBasic, []*Test{
+		{
+			Query: `
+				query timeLines($first: Int, $aggregateType: String) {
+					timeLines(first: $first, aggregateType: $aggregateType) {
+						edges {
+							timeLine {
+								id
+							}
+							cursor
+						}
+						hasMoreData
+					}
+				}
+			`,
+			Variables: `
+			{
+				"first": 4,
+				"aggregateType": "rolestree"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"timeLines": {
+					"edges": [
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509030979000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDQ4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031048000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDUxMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031051000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDU0MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031054000000000
+						}
+					}
+					],
+					"hasMoreData": true
+				}
+			}
+			`,
+		},
+		{
+			Query: `
+				query timeLines($first: Int, $after: String) {
+					timeLines(first: $first, after: $after) {
+						edges {
+							timeLine {
+								id
+							}
+							cursor
+						}
+						hasMoreData
+					}
+				}
+			`,
+			Variables: `
+			{
+				"first": 4,
+				"after": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDU0MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"timeLines": {
+					"edges": [
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDU3MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031057000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDYwMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031060000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDgzMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031083000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDg2MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031086000000000
+						}
+					}
+					],
+					"hasMoreData": true
+				}
+			}
+			`,
+		},
+		{
+			Query: `
+				query timeLines($last: Int, $before: String) {
+					timeLines(last: $last, before: $before) {
+						edges {
+							timeLine {
+								id
+							}
+							cursor
+						}
+						hasMoreData
+					}
+				}
+			`,
+			Variables: `
+			{
+				"last": 4,
+				"before": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDU0MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"timeLines": {
+					"edges": [
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDUxMDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031051000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMxMDQ4MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
+						"timeLine": {
+							"id": 1509031048000000000
+						}
+					},
+					{
+						"cursor": "eyJUaW1lTGluZUlEIjoxNTA5MDMwOTc5MDAwMDAwMDAwLCJBZ2dyZWdhdGVUeXBlIjoicm9sZXN0cmVlIiwiQWdncmVnYXRlSUQiOm51bGx9",
 						"timeLine": {
 							"id": 1509030979000000000
 						}
