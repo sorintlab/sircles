@@ -92,9 +92,9 @@ func serve(cmd *cobra.Command, args []string) error {
 		return errors.New("no db type specified")
 	}
 	switch c.DB.Type {
-	case "postgres":
-	case "cockroachdb":
-	case "sqlite3":
+	case db.Postgres:
+	case db.CockRoachDB:
+	case db.Sqlite3:
 	default:
 		return fmt.Errorf("unsupported db type: %s", c.DB.Type)
 	}
