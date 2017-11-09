@@ -423,7 +423,7 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 
 	pgConnString := os.Getenv("PG_CONNSTRING")
 
-	var uidGenerator command.UIDGenerator
+	var uidGenerator common.UIDGenerator
 	var timeGenerator common.TimeGenerator
 	uidGenerator = NewTestUIDGen()
 	timeGenerator = NewTestTimeGenerator()
@@ -534,7 +534,7 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 	}
 }
 
-func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.DB, uidGenerator command.UIDGenerator, tg common.TimeGenerator, test *Test) {
+func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.DB, uidGenerator common.UIDGenerator, tg common.TimeGenerator, test *Test) {
 	var variables map[string]interface{}
 	if len(test.Variables) > 0 {
 		if err := json.Unmarshal([]byte(test.Variables), &variables); err != nil {
