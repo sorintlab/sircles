@@ -143,6 +143,11 @@ func serve(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Populate/migrate db
+	if err := db.Migrate(); err != nil {
+		return err
+	}
+
 	var authenticator auth.Authenticator
 
 	switch c.Authentication.Type {

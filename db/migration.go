@@ -13,7 +13,7 @@ const migrationTableDDL = `
 	create table if not exists migration (version int not null, time timestamptz not null)
 `
 
-func (db *DB) migrate() error {
+func (db *DB) Migrate() error {
 	tx, err := db.NewTx()
 	if err != nil {
 		return err
