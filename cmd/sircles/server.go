@@ -42,7 +42,7 @@ var serveCmd = &cobra.Command{
 	Use: "serve",
 	Run: func(cmd *cobra.Command, args []string) {
 		if err := serve(cmd, args); err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			log.Errorf("err: %+v", err)
 			os.Exit(-1)
 		}
 	},
@@ -68,7 +68,7 @@ func serve(cmd *cobra.Command, args []string) error {
 
 	c, err := config.Parse(configFile)
 	if err != nil {
-		return fmt.Errorf("error parsing configuration file %s: %v", configFile, err)
+		return errors.WithMessage(err, fmt.Sprintf("error parsing configuration file %s", configFile))
 	}
 
 	if c.Debug {
@@ -76,15 +76,15 @@ func serve(cmd *cobra.Command, args []string) error {
 	}
 
 	if c.Web.HTTP == "" && c.Web.HTTPS == "" {
-		return fmt.Errorf("at least one between a http or https address must be defined")
+		return errors.Errorf("at least one between a http or https address must be defined")
 	}
 
 	if c.Web.HTTPS != "" {
 		if c.Web.TLSKey == "" {
-			return fmt.Errorf("no tls key specified")
+			return errors.Errorf("no tls key specified")
 		}
 		if c.Web.TLSCert == "" {
-			return fmt.Errorf("no tls cert specified")
+			return errors.Errorf("no tls cert specified")
 		}
 	}
 
@@ -96,7 +96,7 @@ func serve(cmd *cobra.Command, args []string) error {
 	case db.CockRoachDB:
 	case db.Sqlite3:
 	default:
-		return fmt.Errorf("unsupported db type: %s", c.DB.Type)
+		return errors.Errorf("unsupported db type: %s", c.DB.Type)
 	}
 
 	tokenSigningData := &handlers.TokenSigningData{Duration: c.TokenSigning.Duration}
@@ -104,15 +104,15 @@ func serve(cmd *cobra.Command, args []string) error {
 	case "hmac":
 		tokenSigningData.Method = jwt.SigningMethodHS256
 		if c.TokenSigning.Key == "" {
-			return fmt.Errorf("empty token signing key for hmac method")
+			return errors.Errorf("empty token signing key for hmac method")
 		}
 		tokenSigningData.Key = []byte(c.TokenSigning.Key)
 	case "rsa":
 		if c.TokenSigning.PrivateKeyPath == "" {
-			return fmt.Errorf("token signing private key file for rsa method not defined")
+			return errors.Errorf("token signing private key file for rsa method not defined")
 		}
 		if c.TokenSigning.PublicKeyPath == "" {
-			return fmt.Errorf("token signing public key file for rsa method not defined")
+			return errors.Errorf("token signing public key file for rsa method not defined")
 		}
 
 		tokenSigningData.Method = jwt.SigningMethodRS256
@@ -133,9 +133,9 @@ func serve(cmd *cobra.Command, args []string) error {
 			return errors.Wrapf(err, "error parsing token signing public key")
 		}
 	case "":
-		return fmt.Errorf("missing token signing method")
+		return errors.Errorf("missing token signing method")
 	default:
-		return fmt.Errorf("unknown token signing method: %q", c.TokenSigning.Method)
+		return errors.Errorf("unknown token signing method: %q", c.TokenSigning.Method)
 	}
 
 	db, err := db.NewDB(c.DB.Type, c.DB.ConnString)
@@ -245,14 +245,14 @@ func serve(cmd *cobra.Command, args []string) error {
 		log.Infof("http listening on %s", c.Web.HTTP)
 		go func() {
 			err := http.ListenAndServe(c.Web.HTTP, mainrouter)
-			listenErrChan <- fmt.Errorf("listening on %s failed: %v", c.Web.HTTP, err)
+			listenErrChan <- errors.Wrapf(err, "listening on %s failed: %v", c.Web.HTTP)
 		}()
 	}
 	if c.Web.HTTPS != "" {
 		log.Infof("https listening on %s", c.Web.HTTPS)
 		go func() {
 			err := http.ListenAndServeTLS(c.Web.HTTPS, c.Web.TLSCert, c.Web.TLSKey, mainrouter)
-			listenErrChan <- fmt.Errorf("listening on %s failed: %v", c.Web.HTTPS, err)
+			listenErrChan <- errors.Wrapf(err, "listening on %s failed: %v", c.Web.HTTPS)
 		}()
 	}
 

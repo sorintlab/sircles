@@ -72,7 +72,7 @@ func scanEvents(rows *sql.Rows) ([]*Event, error) {
 		events = append(events, m)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return events, nil
 }
@@ -99,7 +99,7 @@ func scanAggregatesVersion(rows *sql.Rows) ([]*AggregateVersion, error) {
 		aggregatesVersion = append(aggregatesVersion, a)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return aggregatesVersion, nil
 }

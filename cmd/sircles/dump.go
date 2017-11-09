@@ -40,7 +40,7 @@ func dump(cmd *cobra.Command, args []string) error {
 
 	c, err := config.Parse(configFile)
 	if err != nil {
-		return fmt.Errorf("error parsing configuration file %s: %v", configFile, err)
+		return errors.WithMessage(err, fmt.Sprintf("error parsing configuration file %s", configFile))
 	}
 
 	if c.Debug {
@@ -55,7 +55,7 @@ func dump(cmd *cobra.Command, args []string) error {
 	case db.CockRoachDB:
 	case db.Sqlite3:
 	default:
-		return fmt.Errorf("unsupported db type: %s", c.DB.Type)
+		return errors.Errorf("unsupported db type: %s", c.DB.Type)
 	}
 
 	db, err := db.NewDB(c.DB.Type, c.DB.ConnString)
@@ -96,11 +96,11 @@ func dump(cmd *cobra.Command, args []string) error {
 		for _, event := range events {
 			log.Infof("sequencenumber: %d", event.SequenceNumber)
 			if event.SequenceNumber != lastSeqNumber {
-				panic(fmt.Errorf("sequence number: %d != %d", event.SequenceNumber, lastSeqNumber))
+				panic(errors.Errorf("sequence number: %d != %d", event.SequenceNumber, lastSeqNumber))
 			}
 			eventj, err := json.Marshal(event)
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 			f.Write(eventj)
 			f.Write([]byte("\n"))
