@@ -20,7 +20,6 @@ import (
 
 	"github.com/asaskevich/govalidator"
 	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
 )
 
 var log = slog.S()
@@ -61,26 +60,8 @@ func isUserNameValidFormat(s string) bool {
 	return UserNameRegexp.MatchString(s)
 }
 
-var sf *uidGenerator
-
-func init() {
-	sf = &uidGenerator{}
-}
-
-type uidGenerator struct{}
-
-func (sf *uidGenerator) UUID(s string) util.ID {
-	return util.NewFromUUID(uuid.NewV4())
-}
-
-type UIDGenerator interface {
-	// UUID generates a new uuid, s is used only for tests to generate reproducible
-	// UUIDs
-	UUID(string) util.ID
-}
-
 type CommandService struct {
-	uidGenerator UIDGenerator
+	uidGenerator common.UIDGenerator
 	tg           common.TimeGenerator
 	tx           *db.Tx
 	readDB       *readdb.DBService
@@ -89,9 +70,9 @@ type CommandService struct {
 	hasMemberProvider bool
 }
 
-func NewCommandService(tx *db.Tx, readDB *readdb.DBService, uidGenerator UIDGenerator, tg common.TimeGenerator, hasMemberProvider bool) *CommandService {
+func NewCommandService(tx *db.Tx, readDB *readdb.DBService, uidGenerator common.UIDGenerator, tg common.TimeGenerator, hasMemberProvider bool) *CommandService {
 	if uidGenerator == nil {
-		uidGenerator = sf
+		uidGenerator = &common.DefaultUidGenerator{}
 	}
 
 	if tg == nil {
