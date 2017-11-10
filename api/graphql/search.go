@@ -2,13 +2,13 @@ package graphql
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/sorintlab/sircles/dataloader"
 	"github.com/sorintlab/sircles/readdb"
 
 	"github.com/blevesearch/bleve"
 	graphql "github.com/neelance/graphql-go"
+	"github.com/pkg/errors"
 )
 
 type searchResultResolver struct {
@@ -35,7 +35,7 @@ func (r *searchResultResolver) Hits() []graphql.ID {
 func (r *searchResultResolver) Result() (string, error) {
 	res, err := json.Marshal(r.res)
 	if err != nil {
-		return "", fmt.Errorf("error marshalling search result: %v", err)
+		return "", errors.Wrapf(err, "error marshalling search result")
 	}
 
 	return string(res), nil

@@ -179,7 +179,7 @@ func (c *ldapAuthenticator) UserEntry(conn *ldap.Conn, searchData *searchData) (
 
 	switch n := len(resp.Entries); n {
 	case 0:
-		log.Errorf("ldap: no results returned for filter: %q", filter)
+		errors.Errorf("ldap: no results returned for filter: %q", filter)
 		return nil, nil
 	case 1:
 		return resp.Entries[0], nil
@@ -313,7 +313,7 @@ func (c *ldapMemberProvider) UserEntry(conn *ldap.Conn, searchData *searchData) 
 
 	switch n := len(resp.Entries); n {
 	case 0:
-		log.Errorf("ldap: no results returned for filter: %q", req.Filter)
+		errors.Errorf("ldap: no results returned for filter: %q", req.Filter)
 		return nil, nil
 	case 1:
 		return resp.Entries[0], nil

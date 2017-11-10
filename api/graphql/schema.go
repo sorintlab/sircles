@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -20,6 +18,7 @@ import (
 	"github.com/sorintlab/sircles/util"
 
 	graphql "github.com/neelance/graphql-go"
+	"github.com/pkg/errors"
 	"github.com/renstrom/shortuuid"
 	"github.com/satori/go.uuid"
 )
@@ -599,7 +598,7 @@ func unmarshalUID(uid graphql.ID) (util.ID, error) {
 	if err != nil {
 		id, err = uuid.FromString(string(uid))
 		if err != nil {
-			return util.NilID, fmt.Errorf("cannot unmarshall uid %q: %v", uid, err)
+			return util.NilID, errors.Wrapf(err, "cannot unmarshall uid %q", uid)
 		}
 	}
 	return util.NewFromUUID(id), nil
@@ -1270,7 +1269,7 @@ func getTimeLineNumber(readDB readdb.ReadDB, v *util.TimeLineNumber) (util.TimeL
 
 	if timeLineID < 0 {
 		if !test {
-			return 0, fmt.Errorf("invalid timeLineID %d", *v)
+			return 0, errors.Errorf("invalid timeLineID %d", *v)
 		}
 
 		// TODO(sgotti) ugly hack used only for tests, should to be removed
@@ -1282,7 +1281,7 @@ func getTimeLineNumber(readDB readdb.ReadDB, v *util.TimeLineNumber) (util.TimeL
 			return 0, err
 		}
 		if len(tls) < n {
-			return 0, fmt.Errorf("invalid timeLineID %d", *v)
+			return 0, errors.Errorf("invalid timeLineID %d", *v)
 		}
 		timeLineID = tls[n-1].Number()
 	}

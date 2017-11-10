@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // We have int64 timelines but javascript cannot handle 64 bit
@@ -22,7 +24,7 @@ func (tl *TimeLineNumber) UnmarshalGraphQL(input interface{}) error {
 	case string:
 		t, err := strconv.ParseInt(input, 10, 64)
 		if err != nil {
-			return fmt.Errorf("cannot parse timeline %v: %v", input, err)
+			return errors.Wrapf(err, "cannot parse timeline %v", input)
 		}
 		*tl = TimeLineNumber(t)
 		return nil
@@ -31,7 +33,7 @@ func (tl *TimeLineNumber) UnmarshalGraphQL(input interface{}) error {
 		*tl = TimeLineNumber(int64(input))
 		return nil
 	default:
-		return fmt.Errorf("wrong type: %T", input)
+		return errors.Errorf("wrong type: %T", input)
 	}
 }
 

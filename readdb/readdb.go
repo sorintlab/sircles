@@ -299,7 +299,7 @@ func (s *DBService) vertices(tl util.TimeLineNumber, vertexClass vertexClass, li
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
-			return errors.Wrap(err, "failed to execute query")
+			return errors.WithMessage(err, "failed to execute query")
 		}
 
 		switch vertexClass {
@@ -629,7 +629,7 @@ func (s *DBService) closeVertex(endtl util.TimeLineNumber, vc vertexClass, id ut
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -701,7 +701,7 @@ func (s *DBService) closeEdge(endtl util.TimeLineNumber, ec edgeClass, x, y util
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1173,7 +1173,7 @@ func (s *DBService) insertRole(tl util.TimeLineNumber, id util.ID, role *models.
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1188,7 +1188,7 @@ func (s *DBService) insertDomain(tl util.TimeLineNumber, id util.ID, domain *mod
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1203,7 +1203,7 @@ func (s *DBService) insertAccountability(tl util.TimeLineNumber, id util.ID, acc
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1218,7 +1218,7 @@ func (s *DBService) insertRoleAdditionalContent(tl util.TimeLineNumber, id util.
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1233,7 +1233,7 @@ func (s *DBService) insertMember(tl util.TimeLineNumber, id util.ID, member *mod
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1248,7 +1248,7 @@ func (s *DBService) insertMemberAvatar(tl util.TimeLineNumber, id util.ID, avata
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1263,7 +1263,7 @@ func (s *DBService) insertTension(tl util.TimeLineNumber, id util.ID, tension *m
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1287,7 +1287,7 @@ func (s *DBService) insertRoleEvent(roleEvent *models.RoleEvent) error {
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -1536,7 +1536,7 @@ func (s *DBService) RoleEventsByTypeInternal(roleID util.ID, tl util.TimeLineNum
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
-			return errors.Wrap(err, "failed to execute query")
+			return errors.WithMessage(err, "failed to execute query")
 		}
 		events, err = scanRoleEvents(rows)
 		return err
@@ -1582,7 +1582,7 @@ func (s *DBService) RoleEventsInternal(roleID util.ID, first int, start, after u
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
-			return errors.Wrap(err, "failed to execute query")
+			return errors.WithMessage(err, "failed to execute query")
 		}
 		events, err = scanRoleEvents(rows)
 		return err
@@ -3358,7 +3358,7 @@ func (s *DBService) changeRoleParent(nextTl util.TimeLineNumber, roleID util.ID,
 		return err
 	}
 	if role == nil {
-		return fmt.Errorf("role with id %d doesn't exist", roleID)
+		return errors.Errorf("role with id %d doesn't exist", roleID)
 	}
 	depth := int32(0)
 	if newParentID != nil {

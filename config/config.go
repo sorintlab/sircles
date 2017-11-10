@@ -2,24 +2,24 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/ghodss/yaml"
+	"github.com/pkg/errors"
 	"github.com/sorintlab/sircles/db"
 )
 
 func Parse(configFile string) (*Config, error) {
 	configData, err := ioutil.ReadFile(configFile)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	c := &defaultConfig
 	if err := yaml.Unmarshal(configData, &c); err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	return c, nil
@@ -122,17 +122,17 @@ func (s *Authentication) UnmarshalJSON(b []byte) error {
 		Config json.RawMessage `json:"config"`
 	}
 	if err := json.Unmarshal(b, &auth); err != nil {
-		return fmt.Errorf("failed to parse authentication config: %v", err)
+		return errors.Wrapf(err, "failed to parse authentication config")
 	}
 	f, ok := authConfigs[auth.Type]
 	if !ok {
-		return fmt.Errorf("unknown authentication type %q", auth.Type)
+		return errors.Errorf("unknown authentication type %q", auth.Type)
 	}
 
 	authConfig := f()
 	if len(auth.Config) != 0 {
 		if err := json.Unmarshal(auth.Config, authConfig); err != nil {
-			return fmt.Errorf("failed to parse authentication config: %v", err)
+			return errors.Wrapf(err, "failed to parse authentication config")
 		}
 	}
 	*s = Authentication{
@@ -247,17 +247,17 @@ func (s *MemberProvider) UnmarshalJSON(b []byte) error {
 		Config json.RawMessage `json:"config"`
 	}
 	if err := json.Unmarshal(b, &memberProvider); err != nil {
-		return fmt.Errorf("failed to parse memberProvider config: %v", err)
+		return errors.Wrapf(err, "failed to parse memberProvider config")
 	}
 	f, ok := memberProviderConfigs[memberProvider.Type]
 	if !ok {
-		return fmt.Errorf("unknown member provider type %q", memberProvider.Type)
+		return errors.Errorf("unknown member provider type %q", memberProvider.Type)
 	}
 
 	memberProviderConfig := f()
 	if len(memberProvider.Config) != 0 {
 		if err := json.Unmarshal(memberProvider.Config, memberProviderConfig); err != nil {
-			return fmt.Errorf("failed to parse member provider config: %v", err)
+			return errors.Wrapf(err, "failed to parse member provider config")
 		}
 	}
 	*s = MemberProvider{

@@ -67,7 +67,7 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if part.FormName() == "operations" {
 				if err := json.NewDecoder(part).Decode(&params); err != nil {
-					log.Errorf("err: %v", err)
+					log.Errorf("err: %+v", err)
 					http.Error(w, "", http.StatusBadRequest)
 					return
 				}
@@ -76,7 +76,7 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// TODO(sgotti) instead of keeping the image in memory save it to a temporary file?
 				image, err = ioutil.ReadAll(part)
 				if err != nil {
-					log.Errorf("err: %v", err)
+					log.Errorf("err: %+v", err)
 					http.Error(w, "", http.StatusInternalServerError)
 					return
 				}
@@ -84,7 +84,7 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
-			log.Errorf("err: %v", err)
+			log.Errorf("err: %+v", err)
 			http.Error(w, "", http.StatusBadRequest)
 			return
 		}
@@ -92,13 +92,13 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.NewTx()
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 	readDB, err := readdb.NewDBService(tx)
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -143,21 +143,24 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// different kind of transactions (a readonly one for query only and a
 	// readwrite for mutations).
 	if len(response.Errors) > 0 {
-		log.Errorf("graphql errors: %v", response.Errors)
 		tx.Rollback()
+		log.Errorf("graphql errors: %v", response.Errors)
+		for _, err := range response.Errors {
+			log.Errorf("err: %+v", err.ResolverError)
+		}
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 	// TODO(sgotti) hanle postgresql serialization error and retry mutations
 	if err := tx.Commit(); err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}

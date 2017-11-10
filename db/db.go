@@ -123,7 +123,7 @@ func NewDB(dbType Type, dbConnString string) (*DB, error) {
 
 	sqldb, err := sql.Open(driverName, dbConnString)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	switch dbType {
@@ -162,12 +162,12 @@ func (db *DB) Close() error {
 func (db *DB) NewTx() (*Tx, error) {
 	tx, err := db.db.Begin()
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	switch db.data.t {
 	case Postgres:
 		if _, err := tx.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 	}
 
@@ -197,13 +197,15 @@ func (tx *Tx) Rollback() error {
 func (tx *WrappedTx) Exec(query string, args ...interface{}) (sql.Result, error) {
 	query = tx.data.translate(query)
 	log.Debugf("query: %s, args: %v", query, args)
-	return tx.tx.Exec(query, tx.data.translateArgs(args)...)
+	r, err := tx.tx.Exec(query, tx.data.translateArgs(args)...)
+	return r, errors.WithStack(err)
 }
 
 func (tx *WrappedTx) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	query = tx.data.translate(query)
 	log.Debugf("query: %s, args: %v", query, args)
-	return tx.tx.Query(query, tx.data.translateArgs(args)...)
+	r, err := tx.tx.Query(query, tx.data.translateArgs(args)...)
+	return r, errors.WithStack(err)
 }
 
 func (tx *WrappedTx) QueryRow(query string, args ...interface{}) *sql.Row {
@@ -226,7 +228,7 @@ func (tx *Tx) CurTime() (time.Time, error) {
 	case Sqlite3:
 		var timestring string
 		if err := tx.wrappedTx.QueryRow("select now()").Scan(&timestring); err != nil {
-			return time.Time{}, err
+			return time.Time{}, errors.WithStack(err)
 		}
 		return time.ParseInLocation("2006-01-02 15:04:05.999999999", timestring, time.UTC)
 	case Postgres:
@@ -234,7 +236,7 @@ func (tx *Tx) CurTime() (time.Time, error) {
 	case CockRoachDB:
 		var now time.Time
 		if err := tx.wrappedTx.QueryRow("select now()").Scan(&now); err != nil {
-			return time.Time{}, err
+			return time.Time{}, errors.WithStack(err)
 		}
 		return now, nil
 	}

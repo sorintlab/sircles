@@ -45,7 +45,7 @@ func restore(cmd *cobra.Command, args []string) error {
 
 	c, err := config.Parse(configFile)
 	if err != nil {
-		return fmt.Errorf("error parsing configuration file %s: %v", configFile, err)
+		return errors.WithMessage(err, fmt.Sprintf("error parsing configuration file %s", configFile))
 	}
 
 	if c.Debug {
@@ -60,7 +60,7 @@ func restore(cmd *cobra.Command, args []string) error {
 	case db.CockRoachDB:
 	case db.Sqlite3:
 	default:
-		return fmt.Errorf("unsupported db type: %s", c.DB.Type)
+		return errors.Errorf("unsupported db type: %s", c.DB.Type)
 	}
 
 	db, err := db.NewDB(c.DB.Type, c.DB.ConnString)

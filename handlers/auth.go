@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -140,7 +139,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	member, err := auth.FindMatchingMember(ctx, readDB, matchUID)
 	if err != nil {
 		tx.Rollback()
-		log.Errorf("auth err: %v", err)
+		log.Errorf("auth err: %+v", err)
 		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return
 	}
@@ -149,7 +148,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.memberProvider != nil {
 		memberInfo, err := auth.GetMemberInfo(ctx, h.authenticator, h.memberProvider, loginName, idToken)
 		if err != nil {
-			log.Errorf("failed to retrieve member info: %v", err)
+			log.Errorf("failed to retrieve member info: %+v", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
@@ -172,7 +171,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if member == nil && h.memberProvider != nil {
 		memberInfo, err := auth.GetMemberInfo(ctx, h.authenticator, h.memberProvider, loginName, idToken)
 		if err != nil {
-			log.Errorf("failed to retrieve member info: %v", err)
+			log.Errorf("failed to retrieve member info: %+v", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
@@ -190,7 +189,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Email:    memberInfo.Email,
 		}
 		if _, _, err := commandService.CreateMemberInternal(ctx, c, false, false); err != nil {
-			log.Errorf("failed to create member: %v", err)
+			log.Errorf("failed to create member: %+v", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
@@ -198,7 +197,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		member, err = auth.FindMatchingMember(ctx, readDB, memberInfo.MatchUID)
 		if err != nil {
 			tx.Rollback()
-			log.Errorf("auth err: %v", err)
+			log.Errorf("auth err: %+v", err)
 			http.Error(w, "authentication failed", http.StatusUnauthorized)
 			return
 		}
@@ -211,7 +210,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	tokenString, err := generateToken(h.tokenSigningData, member.ID.String())
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -328,7 +327,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Validate the alg
 		sd := h.tokenSigningData
 		if token.Method != sd.Method {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			return nil, errors.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 		var key interface{}
 		switch sd.Method {
@@ -342,7 +341,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return key, nil
 	})
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
@@ -355,13 +354,13 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.NewTx()
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 	readDB, err := readdb.NewDBService(tx)
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -373,7 +372,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, err := uuid.FromString(userIDString)
 	if err != nil {
-		log.Errorf("err: %v", err)
+		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
@@ -381,7 +380,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	member, err := readDB.MemberInternal(readDB.CurTimeLine().Number(), util.NewFromUUID(userID))
 	if err != nil {
 		tx.Rollback()
-		log.Errorf("auth err: %v", err)
+		log.Errorf("auth err: %+v", err)
 		// mask reported error
 		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return

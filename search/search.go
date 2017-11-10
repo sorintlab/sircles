@@ -107,7 +107,7 @@ func createOpenIndex(path string, mapping mapping.IndexMapping) (bleve.Index, er
 func (s *SearchEngine) eventsPoller() {
 	tx, err := s.db.NewTx()
 	if err != nil {
-		log.Errorw("cannot create db transaction", "error", err)
+		log.Errorf("cannot create db transaction: %+v", err)
 		return
 	}
 	defer tx.Rollback()
@@ -116,7 +116,7 @@ func (s *SearchEngine) eventsPoller() {
 
 	eventSeqNumberBytes, err := s.index.GetInternal([]byte("lasteventseqnumber"))
 	if err != nil {
-		log.Errorw("cannot get last event sequence number", "error", err)
+		log.Errorf("cannot get last event sequence number: %+v", err)
 		return
 	}
 
@@ -129,7 +129,7 @@ func (s *SearchEngine) eventsPoller() {
 	if eventSeqNumber == 0 {
 		eventSeqNumber, err = es.LastSequenceNumber()
 		if err != nil {
-			log.Error(err)
+			log.Errorf("err: %+v", err)
 			return
 		}
 		s.indexMembers(nil)
@@ -139,7 +139,7 @@ func (s *SearchEngine) eventsPoller() {
 	for {
 		events, err := es.GetEvents(eventSeqNumber+1, 100)
 		if err != nil {
-			log.Errorw("cannot get events", "error", err)
+			log.Errorf("cannot get events: %+v", err)
 			return
 		}
 		if len(events) == 0 {
@@ -151,14 +151,14 @@ func (s *SearchEngine) eventsPoller() {
 			log.Debugf("sequencenumber: %d", event.SequenceNumber)
 			eventj, err := json.Marshal(event)
 			if err != nil {
-				log.Errorw("failed to unmarshall events", "error", err)
+				log.Errorf("failed to unmarshall events: %+v", err)
 				return
 			}
 			log.Debugf("eventj: %s", eventj)
 			eventSeqNumber = event.SequenceNumber
 
 			if err := s.HandlEvent(event); err != nil {
-				log.Errorw("failed to handle event", "error", err)
+				log.Errorf("failed to handle event: %+v", err)
 				return
 			}
 		}
@@ -167,7 +167,7 @@ func (s *SearchEngine) eventsPoller() {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(eventSeqNumber))
 	if err := s.index.SetInternal([]byte("lasteventseqnumber"), b); err != nil {
-		log.Errorw("failed to save last event sequence number", "error", err)
+		log.Errorf("failed to save last event sequence number: %+v", err)
 	}
 }
 
