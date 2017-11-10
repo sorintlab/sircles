@@ -1,6 +1,7 @@
 package util
 
 import (
+	"github.com/pkg/errors"
 	"github.com/satori/go.uuid"
 )
 
@@ -12,6 +13,14 @@ var NilID = ID{uuid.Nil}
 
 func NewFromUUID(u uuid.UUID) ID {
 	return ID{UUID: u}
+}
+
+func IDFromString(us string) (ID, error) {
+	u, err := uuid.FromString(us)
+	if err != nil {
+		return NilID, errors.WithStack(err)
+	}
+	return ID{UUID: u}, nil
 }
 
 type IDs []ID

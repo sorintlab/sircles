@@ -2845,95 +2845,130 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 
 	case eventstore.EventTypeTensionCreated:
 		data := event.Data.(*eventstore.EventTensionCreated)
+		tensionID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
 		tension := &models.Tension{
 			Title:       data.Title,
 			Description: data.Description,
 			Closed:      false,
 		}
-		if err := s.newVertex(tl.Number(), event.AggregateID, vertexClassTension, tension); err != nil {
+		if err := s.newVertex(tl.Number(), tensionID, vertexClassTension, tension); err != nil {
 			return err
 		}
-		if err := s.addEdge(tl.Number(), edgeClassMemberTension, event.AggregateID, data.MemberID); err != nil {
+		if err := s.addEdge(tl.Number(), edgeClassMemberTension, tensionID, data.MemberID); err != nil {
 			return err
 		}
 		if data.RoleID != nil {
-			if err := s.addEdge(tl.Number(), edgeClassRoleTension, event.AggregateID, *data.RoleID); err != nil {
+			if err := s.addEdge(tl.Number(), edgeClassRoleTension, tensionID, *data.RoleID); err != nil {
 				return err
 			}
 		}
 
 	case eventstore.EventTypeTensionUpdated:
 		data := event.Data.(*eventstore.EventTensionUpdated)
+		tensionID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
 		tension := &models.Tension{
 			Title:       data.Title,
 			Description: data.Description,
 			Closed:      false,
 		}
 
-		if err := s.updateVertex(tl.Number(), vertexClassTension, event.AggregateID, tension); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassTension, tensionID, tension); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeTensionRoleChanged:
 		data := event.Data.(*eventstore.EventTensionRoleChanged)
+		tensionID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
 		if data.PrevRoleID != nil {
-			if err := s.deleteEdge(tl.Number(), edgeClassRoleTension, event.AggregateID, *data.PrevRoleID); err != nil {
+			if err := s.deleteEdge(tl.Number(), edgeClassRoleTension, tensionID, *data.PrevRoleID); err != nil {
 				return err
 			}
 		}
 		if data.RoleID != nil {
-			if err := s.addEdge(tl.Number(), edgeClassRoleTension, event.AggregateID, *data.RoleID); err != nil {
+			if err := s.addEdge(tl.Number(), edgeClassRoleTension, tensionID, *data.RoleID); err != nil {
 				return err
 			}
 		}
 
 	case eventstore.EventTypeTensionClosed:
 		data := event.Data.(*eventstore.EventTensionClosed)
-		tension, err := s.TensionInternal(tl.Number(), event.AggregateID)
+		tensionID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
+		tension, err := s.TensionInternal(tl.Number(), tensionID)
 		if err != nil {
 			return err
 		}
 		if tension == nil {
-			return errors.Errorf("tension with id %d doesn't exist", event.AggregateID)
+			return errors.Errorf("tension with id %d doesn't exist", tensionID)
 		}
 
 		tension.Closed = true
 		tension.CloseReason = data.Reason
-		if err := s.updateVertex(tl.Number(), vertexClassTension, event.AggregateID, tension); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassTension, tensionID, tension); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeMemberCreated:
 		data := event.Data.(*eventstore.EventMemberCreated)
+		memberID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
 		member := &models.Member{
 			IsAdmin:  data.IsAdmin,
 			UserName: data.UserName,
 			FullName: data.FullName,
 			Email:    data.Email,
 		}
-		if err := s.newVertex(tl.Number(), event.AggregateID, vertexClassMember, member); err != nil {
+		if err := s.newVertex(tl.Number(), memberID, vertexClassMember, member); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeMemberUpdated:
 		data := event.Data.(*eventstore.EventMemberUpdated)
+		memberID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
 		member := &models.Member{
 			IsAdmin:  data.IsAdmin,
 			UserName: data.UserName,
 			FullName: data.FullName,
 			Email:    data.Email,
 		}
-		if err := s.updateVertex(tl.Number(), vertexClassMember, event.AggregateID, member); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassMember, memberID, member); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeMemberPasswordSet:
 		data := event.Data.(*eventstore.EventMemberPasswordSet)
-		err := s.tx.Do(func(tx *db.WrappedTx) error {
-			if _, err := tx.Exec("delete from password where memberid = $1", event.AggregateID); err != nil {
+		memberID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
+		err = s.tx.Do(func(tx *db.WrappedTx) error {
+			if _, err := tx.Exec("delete from password where memberid = $1", memberID); err != nil {
 				return errors.Wrap(err, "failed to delete password")
 			}
-			if _, err := tx.Exec("insert into password (memberid, password) values ($1, $2)", event.AggregateID, data.PasswordHash); err != nil {
+			if _, err := tx.Exec("insert into password (memberid, password) values ($1, $2)", memberID, data.PasswordHash); err != nil {
 				return errors.Wrap(err, "failed to insert password")
 			}
 			return nil
@@ -2943,10 +2978,15 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		}
 	case eventstore.EventTypeMemberAvatarSet:
 		data := event.Data.(*eventstore.EventMemberAvatarSet)
+		memberID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+
 		memberAvatar := &models.Avatar{
 			Image: data.Image,
 		}
-		if err := s.updateVertex(tl.Number(), vertexClassMemberAvatar, event.AggregateID, memberAvatar); err != nil {
+		if err := s.updateVertex(tl.Number(), vertexClassMemberAvatar, memberID, memberAvatar); err != nil {
 			return err
 		}
 

@@ -7,25 +7,22 @@ import (
 	"testing"
 
 	"github.com/sorintlab/sircles/db"
-	"github.com/sorintlab/sircles/util"
-
-	"github.com/satori/go.uuid"
 )
 
 func TestWriteEvents(t *testing.T) {
 	events1 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleCreated,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleMemberAdded,
 		},
@@ -42,17 +39,17 @@ func TestWriteEvents(t *testing.T) {
 
 	events2 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleCreated,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleChangedParent,
 		},
@@ -120,17 +117,17 @@ func TestWriteEvents(t *testing.T) {
 func TestRestoreEvents(t *testing.T) {
 	events1 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleCreated,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleMemberAdded,
 		},
@@ -147,17 +144,17 @@ func TestRestoreEvents(t *testing.T) {
 
 	events2 := Events{
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeCommandExecuted,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleCreated,
 		},
 		&Event{
-			AggregateID:   util.NewFromUUID(uuid.FromStringOrNil("b1399c23-5b50-4c72-b803-804efaba0cb1")),
+			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
 			AggregateType: RolesTreeAggregate,
 			EventType:     EventTypeRoleChangedParent,
 		},

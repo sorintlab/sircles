@@ -304,10 +304,18 @@ func (s *SearchEngine) HandlEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeTensionClosed:
 
 	case eventstore.EventTypeMemberCreated:
-		reindexMembers = append(reindexMembers, event.AggregateID)
+		memberID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+		reindexMembers = append(reindexMembers, memberID)
 
 	case eventstore.EventTypeMemberUpdated:
-		reindexMembers = append(reindexMembers, event.AggregateID)
+		memberID, err := util.IDFromString(event.AggregateID)
+		if err != nil {
+			return err
+		}
+		reindexMembers = append(reindexMembers, memberID)
 
 	case eventstore.EventTypeMemberPasswordSet:
 

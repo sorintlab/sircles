@@ -174,9 +174,9 @@ func (s *EventStore) LastSequenceNumber() (int64, error) {
 }
 
 func (s *EventStore) WriteEvents(events Events) (int64, error) {
-	aggregatesIDsMap := map[util.ID]struct{}{}
-	aggregatesIDs := []util.ID{}
-	versions := map[util.ID]*AggregateVersion{}
+	aggregatesIDsMap := map[string]struct{}{}
+	aggregatesIDs := []string{}
+	versions := map[string]*AggregateVersion{}
 	// get the aggregates versions
 	for _, e := range events {
 		aggregatesIDsMap[e.AggregateID] = struct{}{}
@@ -247,7 +247,7 @@ func (s *EventStore) WriteEvents(events Events) (int64, error) {
 }
 
 func (s *EventStore) RestoreEvents(events Events) (int64, error) {
-	versions := map[util.ID]*AggregateVersion{}
+	versions := map[string]*AggregateVersion{}
 
 	lastSequenceNumber, err := s.LastSequenceNumber()
 	if err != nil {

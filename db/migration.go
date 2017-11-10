@@ -98,10 +98,10 @@ var migrations = []migration{
 	{
 		stmts: []string{
 			// === EventStore ===
-			`create table event (id uuid, sequencenumber bigint, eventtype varchar not null, aggregatetype varchar, aggregateid uuid, timestamp timestamptz not null, version bigint, correlationid uuid, causationid uuid, groupid uuid, data bytea,
+			`create table event (id uuid not null, sequencenumber bigint, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint, correlationid uuid, causationid uuid, groupid uuid, data bytea,
 		PRIMARY KEY (sequencenumber))`,
 			// stores the latest version for every aggregate
-			"create table aggregateversion (aggregatetype varchar, aggregateid uuid, version bigint, PRIMARY KEY(aggregateid, version))",
+			"create table aggregateversion (aggregatetype varchar not null, aggregateid varchar not null, version bigint not null, PRIMARY KEY(aggregateid, version))",
 
 			// === ReadDB ===
 
@@ -112,7 +112,7 @@ var migrations = []migration{
 			// we can end with different "events" happening at the same time
 			// (with millisecond precision for postgres), so timestamp cannot be
 			// unique.
-			"create table timeline (timestamp timestamptz not null, groupid uuid, aggregatetype varchar, aggregateid uuid, PRIMARY KEY(groupid))",
+			"create table timeline (timestamp timestamptz not null, groupid uuid not null, aggregatetype varchar not null, aggregateid varchar not null, PRIMARY KEY(groupid))",
 			"create index timeline_ts on timeline(timestamp)",
 			"create index timeline_aggregatetype on timeline(aggregatetype)",
 			"create index timeline_aggregateid on timeline(aggregateid)",
