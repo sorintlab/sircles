@@ -178,6 +178,24 @@ func (db *DB) NewTx() (*Tx, error) {
 	}, nil
 }
 
+func (db *DB) Do(f func(tx *Tx) error) error {
+	tx, err := db.NewTx()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p)
+		}
+	}()
+	if err = f(tx); err != nil {
+		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
 func (tx *Tx) lock() {
 	tx.l.Lock()
 }
