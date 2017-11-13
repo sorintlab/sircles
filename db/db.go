@@ -46,6 +46,10 @@ var (
 	dbDataPostgres = dbData{
 		t:                 Postgres,
 		supportsTimezones: true,
+		queryReplacers: []replacer{
+			// Remove sqlite3 only statements
+			{regexp.MustCompile(`--SQLITE3\n.*`), ""},
+		},
 	}
 
 	dbDataSQLite3 = dbData{
@@ -61,6 +65,10 @@ var (
 			{matchLiteral("timestamptz"), "timestamp"},
 			// convert now to the max precision time available with sqlite3
 			{regexp.MustCompile(`\bnow\(\)`), "strftime('%Y-%m-%d %H:%M:%f', 'now')"},
+			{regexp.MustCompile(`select pg_advisory_xact_lock\(.*`), "select 1"},
+			{regexp.MustCompile(`notify\s+.*`), "select 1"},
+			// Remove postgres only statements
+			{regexp.MustCompile(`--POSTGRES\n.*`), ""},
 		},
 	}
 

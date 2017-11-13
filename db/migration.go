@@ -98,8 +98,13 @@ var migrations = []migration{
 	{
 		stmts: []string{
 			// === EventStore ===
-			`create table event (id uuid not null, sequencenumber bigint, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint, correlationid uuid, causationid uuid, groupid uuid, data bytea,
-		PRIMARY KEY (sequencenumber))`,
+			`--POSTGRES
+             create table event (id uuid not null, sequencenumber bigserial, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint not null, correlationid uuid, causationid uuid, groupid uuid, data bytea, PRIMARY KEY (sequencenumber), UNIQUE (aggregatetype, aggregateid, version))`,
+			`--SQLITE3
+             create table event (id uuid not null, sequencenumber INTEGER PRIMARY KEY AUTOINCREMENT, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint not null, correlationid uuid, causationid uuid, groupid uuid, data bytea, UNIQUE (aggregatetype, aggregateid, version))`,
+			"create index event_aggregateid_version on event(aggregateid, version)",
+			"create index event_aggregatetype on event(aggregatetype)",
+
 			// stores the latest version for every aggregate
 			"create table aggregateversion (aggregatetype varchar not null, aggregateid varchar not null, version bigint not null, PRIMARY KEY(aggregateid, version))",
 

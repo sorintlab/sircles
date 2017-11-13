@@ -532,6 +532,12 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if parallel {
+		// when running concurrent tests use the default uid generator or the
+		// same uuid will be generated for aggregates with the same properties
+		uidGenerator = &common.DefaultUidGenerator{}
+	}
+
 	if !parallel {
 		for i, test := range tests {
 			t.Run(strconv.Itoa(i+1), func(t *testing.T) {
@@ -2885,7 +2891,7 @@ func TestConcurrentChangeRolesTree(t *testing.T) {
 				}
 			}
 			`,
-			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+			Error: fmt.Errorf(`graphql: failed to execute query: pq: duplicate key value violates unique constraint "event_aggregatetype_aggregateid_version_key"`),
 		},
 	}, true)
 }

@@ -3328,16 +3328,6 @@ func (s *DBService) ApplyEvent(event *eventstore.Event) error {
 		panic(errors.Errorf("unhandled event: %s", event.EventType))
 	}
 
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		if _, err := tx.Exec("insert into sequencenumber (sequencenumber) values ($1)", event.SequenceNumber); err != nil {
-			return errors.Wrap(err, "failed to save sequencenumber")
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
