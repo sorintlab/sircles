@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -403,6 +404,10 @@ type Test struct {
 }
 
 func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
+	runTests(t, initFunc, tests, false)
+}
+
+func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 	tmpDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatalf("ioutil.TempDir(%q, %q) got error %q", "", "", err)
@@ -419,6 +424,11 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 		dbType = db.Postgres
 	default:
 		log.Fatalf("unknown db type")
+	}
+
+	// skip test when running on sqlite3 due to different concurrency behavior
+	if parallel && dbType == db.Sqlite3 {
+		t.Skipf("testing with sqlite3 db")
 	}
 
 	pgConnString := os.Getenv("PG_CONNSTRING")
@@ -522,19 +532,95 @@ func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(tests) == 1 {
-		RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, tests[0])
-		return
-	}
+	if !parallel {
+		for i, test := range tests {
+			t.Run(strconv.Itoa(i+1), func(t *testing.T) {
+				result := RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, test)
+				if len(result.Errors) != 0 {
+					re := result.Errors[0]
 
-	for i, test := range tests {
-		t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-			RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, test)
-		})
+					if test.Error != nil {
+						if re.Error() != test.Error.Error() {
+							t.Fatalf("expected error: %v, got error: %v", test.Error, re)
+						}
+					} else {
+						t.Fatal(result.Errors[0])
+					}
+				}
+				got := formatJSON(t, result.Data)
+				want := formatJSON(t, []byte(test.ExpectedResult))
+
+				if !bytes.Equal(got, want) {
+					t.Logf("want: %s", want)
+					t.Logf("got:  %s", got)
+					t.Fatal("want: %s, got: %s", want, got)
+				}
+			})
+		}
+	} else {
+		var wg sync.WaitGroup
+		var m sync.Mutex
+		results := []*graphql.Response{}
+		for _, test := range tests {
+			wg.Add(1)
+			go func(test *Test) {
+				defer wg.Done()
+				result := RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, test)
+				m.Lock()
+				results = append(results, result)
+				m.Unlock()
+			}(test)
+		}
+		wg.Wait()
+
+		// Check that the results match the expected ones but globally (not
+		// for that specific tests)
+		matchedResults := make([]bool, len(results))
+		for _, test := range tests {
+			for i, result := range results {
+				// skip already matched result
+				if matchedResults[i] == true {
+					continue
+				}
+				if test.Error != nil {
+					if len(result.Errors) > 0 {
+						re := result.Errors[0]
+
+						if re.Error() == test.Error.Error() {
+							matchedResults[i] = true
+							break
+						}
+					}
+					// skip result checking if there wasn't an error
+					continue
+				}
+				// skip result checking if we aren't expecting an error but there was an error
+				if len(result.Errors) != 0 {
+					continue
+				}
+
+				got := formatJSON(t, result.Data)
+				want := formatJSON(t, []byte(test.ExpectedResult))
+
+				if bytes.Equal(got, want) {
+					matchedResults[i] = true
+					break
+				}
+			}
+		}
+		mc := 0
+		for _, mr := range matchedResults {
+			if mr == true {
+				mc++
+			}
+		}
+		if mc != len(tests) {
+			t.Fatalf("only %d of %d tests matched expected results/errors", mc, len(tests))
+		}
 	}
 }
 
-func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.DB, uidGenerator common.UIDGenerator, tg common.TimeGenerator, test *Test) {
+func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.DB, uidGenerator common.UIDGenerator, tg common.TimeGenerator, test *Test) *graphql.Response {
 	var variables map[string]interface{}
 	if len(test.Variables) > 0 {
 		if err := json.Unmarshal([]byte(test.Variables), &variables); err != nil {
@@ -555,32 +641,16 @@ func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.D
 	ctx = context.WithValue(ctx, "service", readDB)
 	ctx = context.WithValue(ctx, "commandservice", commandService)
 	result := schema.Exec(ctx, test.Query, test.OperationName, variables)
-	if len(result.Errors) != 0 {
-		re := result.Errors[0]
 
-		if test.Error != nil {
-			if re.Error() != test.Error.Error() {
-				t.Fatalf("expected error: %v, got error: %v", test.Error, re)
-			}
+	if len(result.Errors) == 0 {
+		if err = tx.Commit(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		} else {
-			t.Fatal(result.Errors[0])
+			tx.Rollback()
 		}
-		return
 	}
 
-	if err = tx.Commit(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := formatJSON(t, result.Data)
-
-	want := formatJSON(t, []byte(test.ExpectedResult))
-
-	if !bytes.Equal(got, want) {
-		t.Logf("want: %s", want)
-		t.Logf("got:  %s", got)
-		t.Fatal()
-	}
+	return result
 }
 
 func formatJSON(t *testing.T, data []byte) []byte {
@@ -2766,4 +2836,259 @@ func TestCircleMember(t *testing.T) {
 			`,
 		},
 	})
+}
+
+func TestConcurrentChangeRolesTree(t *testing.T) {
+	runTests(t, initBasic, []*Test{
+		{
+			Query: `
+				mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
+					roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
+						hasErrors
+					}
+				}
+			`,
+			Variables: `
+			{
+				"roleUID": "sXPck8eJP5jC85jQkmNZVG",
+				"memberUID": "t9oc2y8syqYNNLfxfGkXM7",
+				"focus": "focus01"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"roleAddMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		{
+			Query: `
+				mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
+					roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
+						hasErrors
+					}
+				}
+			`,
+			Variables: `
+			{
+				"roleUID": "sXPck8eJP5jC85jQkmNZVG",
+				"memberUID": "t9oc2y8syqYNNLfxfGkXM7",
+				"focus": "focus01"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"roleAddMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+		},
+	}, true)
+}
+
+func TestConcurrentChangeRolesTreeCreateMember(t *testing.T) {
+	runTests(t, initBasic, []*Test{
+		{
+			Query: `
+			mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
+				roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"roleUID": "sXPck8eJP5jC85jQkmNZVG",
+				"memberUID": "t9oc2y8syqYNNLfxfGkXM7",
+				"focus": "focus01"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"roleAddMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		{
+			Query: `
+			mutation CreateMember($createMemberChange: CreateMemberChange!) {
+				createMember(createMemberChange: $createMemberChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"createMemberChange": {
+					"userName": "newuser01",
+					"fullName": "newuser01",
+					"email": "newuser01@example.com",
+					"password": "password"
+				}
+			}
+			`,
+			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+		},
+	}, true)
+}
+
+func TestConcurrentCreateMemberSameUsername(t *testing.T) {
+	runTests(t, initBasic, []*Test{
+		{
+			Query: `
+			mutation CreateMember($createMemberChange: CreateMemberChange!) {
+				createMember(createMemberChange: $createMemberChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"createMemberChange": {
+					"userName": "newuser01",
+					"fullName": "newuser01",
+					"email": "newuser01@example.com",
+					"password": "password"
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"createMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		{
+			Query: `
+				mutation CreateMember($createMemberChange: CreateMemberChange!) {
+					createMember(createMemberChange: $createMemberChange) {
+						hasErrors
+					}
+				}
+				`,
+			Variables: `
+				{
+					"createMemberChange": {
+						"userName": "newuser01",
+						"fullName": "newuser01",
+						"email": "anothernewuser01@example.com",
+						"password": "password"
+					}
+				}
+				`,
+			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+		},
+	}, true)
+}
+
+func TestConcurrentCreateMemberSameEmail(t *testing.T) {
+	runTests(t, initBasic, []*Test{
+		{
+			Query: `
+				mutation CreateMember($createMemberChange: CreateMemberChange!) {
+					createMember(createMemberChange: $createMemberChange) {
+						hasErrors
+					}
+				}
+				`,
+			Variables: `
+				{
+					"createMemberChange": {
+						"userName": "newuser01",
+						"fullName": "newuser01",
+						"email": "newuser01@example.com",
+						"password": "password"
+					}
+				}
+				`,
+			ExpectedResult: `
+				{
+					"createMember": {
+						"hasErrors": false
+					}
+				}
+				`,
+		},
+		{
+			Query: `
+				mutation CreateMember($createMemberChange: CreateMemberChange!) {
+					createMember(createMemberChange: $createMemberChange) {
+						hasErrors
+					}
+				}
+				`,
+			Variables: `
+				{
+					"createMemberChange": {
+						"userName": "newuser02",
+						"fullName": "newuser02",
+						"email": "newuser01@example.com",
+						"password": "password"
+					}
+				}
+			`,
+			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+		},
+	}, true)
+}
+
+func TestConcurrentCreateMemberSameMatchUID(t *testing.T) {
+	runTests(t, initBasic, []*Test{
+		{
+			Query: `
+				mutation CreateMember($createMemberChange: CreateMemberChange!) {
+					createMember(createMemberChange: $createMemberChange) {
+						hasErrors
+					}
+				}
+			`,
+			Variables: `
+			{
+				"createMemberChange": {
+					"userName": "newuser01",
+					"fullName": "newuser01",
+					"email": "newuser01@example.com",
+					"matchUID": "newuser01",
+					"password": "password"
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"createMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		{
+			Query: `
+			mutation CreateMember($createMemberChange: CreateMemberChange!) {
+				createMember(createMemberChange: $createMemberChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"createMemberChange": {
+					"userName": "newuser02",
+					"fullName": "newuser02",
+					"email": "newuser02@example.com",
+					"matchUID": "newuser01",
+					"password": "password"
+				}
+			}
+			`,
+			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+		},
+	}, true)
 }
