@@ -128,10 +128,10 @@ var migrations = []migration{
 			"create table role (id uuid, start_tl bigint, end_tl bigint, roletype varchar not null, depth int not null, name varchar, purpose varchar, PRIMARY KEY (id, start_tl))",
 			"create unique index role_tl on role(id, start_tl, end_tl DESC)",
 
-			"create table domain (id uuid, start_tl bigint, end_tl bigint, name varchar, PRIMARY KEY (id, start_tl))",
+			"create table domain (id uuid, start_tl bigint, end_tl bigint, description varchar, PRIMARY KEY (id, start_tl))",
 			"create unique index domain_tl on domain(id, start_tl, end_tl DESC)",
 
-			"create table accountability (id uuid, start_tl bigint, end_tl bigint, name varchar, PRIMARY KEY (id, start_tl))",
+			"create table accountability (id uuid, start_tl bigint, end_tl bigint, description varchar, PRIMARY KEY (id, start_tl))",
 			"create unique index accountability_tl on accountability(id, start_tl, end_tl DESC)",
 
 			"create table roleadditionalcontent (id uuid, start_tl bigint, end_tl bigint, content varchar, PRIMARY KEY (id, start_tl))",

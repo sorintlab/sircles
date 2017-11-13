@@ -101,7 +101,7 @@ var (
 	roleInsert = sb.Insert(vertexClassRole.String()).Columns(roleAllColumns...)
 
 	domainColumns = []string{
-		"name",
+		"description",
 	}
 
 	domainAllColumns = append(vertexColumns, domainColumns...)
@@ -110,7 +110,7 @@ var (
 	domainInsert = sb.Insert(vertexClassDomain.String()).Columns(domainAllColumns...)
 
 	accountabilityColumns = []string{
-		"name",
+		"description",
 	}
 
 	accountabilityAllColumns = append(vertexColumns, accountabilityColumns...)
