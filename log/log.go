@@ -32,12 +32,8 @@ func init() {
 	s = logger.Sugar()
 }
 
-func SetDebug(debug bool) {
-	if debug {
-		level.SetLevel(zapcore.DebugLevel)
-	} else {
-		level.SetLevel(zapcore.InfoLevel)
-	}
+func SetLevel(l zapcore.Level) {
+	level.SetLevel(l)
 }
 
 func S() *zap.SugaredLogger {
