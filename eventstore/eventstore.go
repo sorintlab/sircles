@@ -15,12 +15,16 @@ import (
 
 var log = slog.S()
 
+const (
+	eventStoreExclusiveLock = iota
+)
+
 var (
 	// Use postgresql $ placeholder. It'll be converted to ? from the provided db functions
 	sb = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
 	eventSelect            = sb.Select("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "groupid", "data").From("event")
-	eventInsert            = sb.Insert("event").Columns("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "groupid", "data")
+	eventInsert            = sb.Insert("event").Columns("id", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "groupid", "data")
 	aggregateVersionSelect = sb.Select("aggregatetype", "aggregateid", "version").From("aggregateversion")
 	aggregateVersionInsert = sb.Insert("aggregateversion").Columns("aggregatetype", "aggregateid", "version")
 )
@@ -109,7 +113,11 @@ func (s *EventStore) insertEvent(tx *db.Tx, event *Event) error {
 	if err != nil {
 		return errors.Wrap(err, "failed to marshal event")
 	}
-	q, args, err := eventInsert.Values(event.ID, event.SequenceNumber, event.EventType, event.AggregateType, event.AggregateID, event.Timestamp, event.Version, event.CorrelationID, event.CausationID, event.GroupID, data).ToSql()
+	return s.insertEventMarshalled(tx, event, data)
+}
+
+func (s *EventStore) insertEventMarshalled(tx *db.Tx, event *Event, data []byte) error {
+	q, args, err := eventInsert.Values(event.ID, event.EventType, event.AggregateType, event.AggregateID, event.Timestamp, event.Version, event.CorrelationID, event.CausationID, event.GroupID, data).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
 	}
@@ -119,7 +127,7 @@ func (s *EventStore) insertEvent(tx *db.Tx, event *Event) error {
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -133,13 +141,13 @@ func (s *EventStore) insertAggregateVersion(tx *db.Tx, av *AggregateVersion) err
 	err = tx.Do(func(tx *db.WrappedTx) error {
 		// poor man insert or update...
 		if _, err := tx.Exec("delete from aggregateversion where aggregateid = $1", av.AggregateID); err != nil {
-			return errors.Wrap(err, "failed to delete aggregateversion")
+			return errors.WithMessage(err, "failed to delete aggregateversion")
 		}
 		_, err = tx.Exec(q, args...)
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to execute query")
+		return errors.WithMessage(err, "failed to execute query")
 	}
 	return nil
 }
@@ -173,97 +181,107 @@ func (s *EventStore) LastSequenceNumber() (int64, error) {
 	return int64(0), nil
 }
 
-func (s *EventStore) WriteEvents(events Events) (int64, error) {
-	aggregatesIDsMap := map[string]struct{}{}
-	aggregatesIDs := []string{}
-	versions := map[string]*AggregateVersion{}
+func (s *EventStore) WriteEvents(events Events, version int64) error {
+	if len(events) == 0 {
+		return nil
+	}
+
 	// get the aggregates versions
+	aggregateID := events[0].AggregateID
+	aggregateType := events[0].AggregateType
+
 	for _, e := range events {
-		aggregatesIDsMap[e.AggregateID] = struct{}{}
-		versions[e.AggregateID] = &AggregateVersion{
-			AggregateType: e.AggregateType,
-			AggregateID:   e.AggregateID,
-			Version:       0,
+		if e.AggregateID != aggregateID {
+			return errors.Errorf("events have different aggregate id")
+		}
+		if e.AggregateType != aggregateType {
+			return errors.Errorf("events have different aggregate types")
 		}
 	}
-	for aggregateID, _ := range aggregatesIDsMap {
-		aggregatesIDs = append(aggregatesIDs, aggregateID)
-	}
-	sb := aggregateVersionSelect.Where(sq.Eq{"aggregateid": aggregatesIDs})
 
+	sb := sb.Select("aggregatetype", "version").From("aggregateversion").Where(sq.Eq{"aggregateid": aggregateID})
 	q, args, err := sb.ToSql()
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to build query")
+		return errors.Wrap(err, "failed to build query")
 	}
 
-	var aggregatesVersion []*AggregateVersion
+	var curVersion int64
+	var at string
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		rows, err := tx.Query(q, args...)
-		if err != nil {
-			return errors.Wrap(err, "failed to execute query")
+		err := tx.QueryRow(q, args...).Scan(&at, &curVersion)
+		if err != nil && err != sql.ErrNoRows {
+			return errors.WithMessage(err, "failed to execute query")
 		}
-		aggregatesVersion, err = scanAggregatesVersion(rows)
+		return nil
+	})
+
+	// optimistic locking: check current version with expected version.
+	// NOTE This doesn't catch concurrent transactions updating the same
+	// aggregate, this is catched by unique constraints on (aggregateType,
+	// aggregateID, version).
+	if curVersion != version {
+		return errors.Errorf("current version %d different than provided version %d", curVersion, version)
+	}
+
+	if version != 0 && aggregateType != AggregateType(at) {
+		return errors.Errorf("aggregate in version has different type")
+	}
+
+	prevVersion := version
+
+	// write the events
+
+	// marshal before to shorten lock time
+	mData := make([][]byte, len(events))
+	for i, e := range events {
+		data, err := json.Marshal(e.Data)
+		if err != nil {
+			return errors.Wrap(err, "failed to marshal event")
+		}
+		mData[i] = data
+
+		version++
+
+		e.Timestamp = s.tg.Now()
+		e.Version = version
+	}
+
+	// take exlusive lock.
+	// In this way we'll commit ordered (but not gapless) sequence numbers and avoid
+	// races where a lower sequence number is committed after an higher one
+	// causing handlers relying to the sequence number to lose these events.
+	err = s.tx.Do(func(tx *db.WrappedTx) error {
+		_, err = tx.Exec("select pg_advisory_xact_lock($1)", eventStoreExclusiveLock)
 		return err
 	})
-	for _, aggregateVersion := range aggregatesVersion {
-		if version, ok := versions[aggregateVersion.AggregateID]; ok {
-			if version.AggregateType != aggregateVersion.AggregateType {
-				return 0, errors.Errorf("expected aggregateType %q, got %q", version.AggregateType, aggregateVersion.AggregateType)
-			}
-		}
-		versions[aggregateVersion.AggregateID] = aggregateVersion
-	}
-
-	lastSequenceNumber, err := s.LastSequenceNumber()
 	if err != nil {
-		return 0, errors.Wrap(err, "failed to get last sequence number")
+		return errors.Wrap(err, "failed to take exlusive lock")
 	}
-
-	curSequenceNumber := lastSequenceNumber
-
-	// Write the events
-	for _, e := range events {
-		curSequenceNumber++
-
-		versions[e.AggregateID].Version++
-
-		e.SequenceNumber = curSequenceNumber
-		e.Timestamp = s.tg.Now()
-		e.Version = versions[e.AggregateID].Version
-
-		if err := s.insertEvent(s.tx, e); err != nil {
-			return 0, err
+	for i, e := range events {
+		if err := s.insertEventMarshalled(s.tx, e, mData[i]); err != nil {
+			return err
 		}
 	}
 
 	// Update the aggregates versions
-	for _, av := range versions {
-		if err := s.insertAggregateVersion(s.tx, av); err != nil {
-			return 0, err
-		}
+	if version == prevVersion {
+		return nil
+	}
+	log.Debugf("updating aggregateType %s to version: %d", aggregateType, version)
+	if err := s.insertAggregateVersion(s.tx, &AggregateVersion{AggregateType: aggregateType, AggregateID: aggregateID, Version: version}); err != nil {
+		return err
 	}
 
-	return curSequenceNumber, nil
+	return nil
 }
 
-func (s *EventStore) RestoreEvents(events Events) (int64, error) {
+func (s *EventStore) RestoreEvents(events Events) error {
 	versions := map[string]*AggregateVersion{}
-
-	lastSequenceNumber, err := s.LastSequenceNumber()
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to get last sequence number")
-	}
-
-	curSequenceNumber := lastSequenceNumber
 
 	// Write the events
 	for _, e := range events {
-		curSequenceNumber++
-
-		e.SequenceNumber = curSequenceNumber
-
 		if err := s.insertEvent(s.tx, e); err != nil {
-			return 0, err
+			return err
 		}
 
 		versions[e.AggregateID] = &AggregateVersion{
@@ -276,11 +294,11 @@ func (s *EventStore) RestoreEvents(events Events) (int64, error) {
 	// Update the aggregates versions
 	for _, av := range versions {
 		if err := s.insertAggregateVersion(s.tx, av); err != nil {
-			return 0, err
+			return err
 		}
 	}
 
-	return curSequenceNumber, nil
+	return nil
 }
 
 func (s *EventStore) GetEvent(id *util.ID) (*Event, error) {
@@ -337,4 +355,23 @@ func (s *EventStore) GetEvents(start, count int64) ([]*Event, error) {
 		return nil, err
 	}
 	return events, nil
+}
+
+func (s *EventStore) AggregateVersion(aggregateID string) (int64, error) {
+	sb := sb.Select("aggregatetype", "version").From("aggregateversion").Where(sq.Eq{"aggregateid": aggregateID})
+	q, args, err := sb.ToSql()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to build query")
+	}
+
+	var curVersion int64
+	var at string
+	err = s.tx.Do(func(tx *db.WrappedTx) error {
+		err := tx.QueryRow(q, args...).Scan(&at, &curVersion)
+		if err != nil && err != sql.ErrNoRows {
+			return errors.WithMessage(err, "failed to execute query")
+		}
+		return nil
+	})
+	return curVersion, nil
 }

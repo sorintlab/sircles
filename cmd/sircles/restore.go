@@ -137,13 +137,8 @@ func applyEvents(db *db.DB, events eventstore.Events) error {
 	if err != nil {
 		return err
 	}
-	sequenceNumber := events[len(events)-1].SequenceNumber
-	curSequenceNumber, err := es.RestoreEvents(events)
-	if err != nil {
+	if err := es.RestoreEvents(events); err != nil {
 		return err
-	}
-	if sequenceNumber != curSequenceNumber {
-		return errors.Errorf("expected sequence number: %d != writed event sequence number: %d", sequenceNumber, curSequenceNumber)
 	}
 	if err := readDB.ApplyEvents(events); err != nil {
 		return err
