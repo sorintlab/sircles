@@ -39,3 +39,7 @@ import:
 - package: golang.org/x/crypto
   subpackages:
   - bcrypt
+- package: github.com/davecgh/go-spew
+  version: v1.1.0
+  subpackages:
+  - spew

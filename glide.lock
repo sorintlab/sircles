@@ -1,5 +1,5 @@
-hash: 201e8c2d1b1145cd3ce96e8d3ed539dd11eb719661bcfcec07eeb1e1d2c6c747
-updated: 2017-11-14T18:12:30.465363444+01:00
+hash: 262a4213b34b2b1e60ef432b396e2673d852316828219b40c4401ca2824c0b5e
+updated: 2017-11-14T18:20:00.202639674+01:00
 imports:
 - name: github.com/asaskevich/govalidator
   version: 7664702784775e51966f0885f5cd27435916517b
@@ -49,6 +49,10 @@ imports:
   repo: https://github.com/boltdb/bolt
 - name: github.com/coreos/go-oidc
   version: a93f71fdfe73d2c0f5413c0565eea0af6523a6df
+- name: github.com/davecgh/go-spew
+  version: 346938d642f2ec3594ed81d874461961cd0faa76
+  subpackages:
+  - spew
 - name: github.com/dchest/siphash
   version: 42ba037e748c9062a75e0924705c43b893edefcd
 - name: github.com/dgrijalva/jwt-go
