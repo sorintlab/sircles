@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -49,7 +50,7 @@ func restore(cmd *cobra.Command, args []string) error {
 	}
 
 	if c.Debug {
-		slog.SetDebug(true)
+		slog.SetLevel(zapcore.DebugLevel)
 	}
 
 	if c.DB.Type == "" {

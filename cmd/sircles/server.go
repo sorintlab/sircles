@@ -24,6 +24,7 @@ import (
 	"github.com/neelance/graphql-go"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap/zapcore"
 )
 
 func strAddr(s string) *string {
@@ -72,7 +73,7 @@ func serve(cmd *cobra.Command, args []string) error {
 	}
 
 	if c.Debug {
-		slog.SetDebug(true)
+		slog.SetLevel(zapcore.DebugLevel)
 	}
 
 	if c.Web.HTTP == "" && c.Web.HTTPS == "" {
