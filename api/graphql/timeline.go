@@ -9,7 +9,7 @@ import (
 )
 
 type timeLineConnectionResolver struct {
-	s             readdb.ReadDB
+	s             readdb.ReadDBService
 	timeLines     []*util.TimeLine
 	aggregateType string
 	aggregateID   *util.ID
@@ -31,7 +31,7 @@ func (r *timeLineConnectionResolver) Edges() *[]*timeLineEdgeResolver {
 }
 
 type timeLineEdgeResolver struct {
-	s             readdb.ReadDB
+	s             readdb.ReadDBService
 	timeLine      *util.TimeLine
 	aggregateType string
 	aggregateID   *util.ID
@@ -48,7 +48,7 @@ func (r *timeLineEdgeResolver) TimeLine() *timeLineResolver {
 }
 
 type timeLineResolver struct {
-	s        readdb.ReadDB
+	s        readdb.ReadDBService
 	timeLine *util.TimeLine
 
 	dataLoaders *dataloader.DataLoaders

@@ -125,6 +125,7 @@ func (s *SearchEngine) eventsPoller() {
 		eventSeqNumber = int64(binary.LittleEndian.Uint64(eventSeqNumberBytes))
 	}
 
+	ctx := context.Background()
 	// if empty index, index the current state and start from the last sequence number
 	if eventSeqNumber == 0 {
 		eventSeqNumber, err = es.LastSequenceNumber()
@@ -132,8 +133,8 @@ func (s *SearchEngine) eventsPoller() {
 			log.Errorf("err: %+v", err)
 			return
 		}
-		s.indexMembers(nil)
-		s.indexRoles(nil)
+		s.indexMembers(ctx, nil)
+		s.indexRoles(ctx, nil)
 	}
 
 	for {
@@ -325,13 +326,14 @@ func (s *SearchEngine) HandlEvent(event *eventstore.Event) error {
 		return errors.Errorf("unhandled event: %s", event.EventType)
 	}
 
+	ctx := context.Background()
 	if len(reindexMembers) > 0 {
-		if err := s.indexMembers(reindexMembers); err != nil {
+		if err := s.indexMembers(ctx, reindexMembers); err != nil {
 			return errors.Wrap(err, "indexing error")
 		}
 	}
 	if len(reindexRoles) > 0 {
-		if err := s.indexRoles(reindexRoles); err != nil {
+		if err := s.indexRoles(ctx, reindexRoles); err != nil {
 			return errors.Wrap(err, "indexing error")
 		}
 	}
@@ -345,7 +347,7 @@ func (s *SearchEngine) HandlEvent(event *eventstore.Event) error {
 	return nil
 }
 
-func (s *SearchEngine) indexMembers(ids []util.ID) error {
+func (s *SearchEngine) indexMembers(ctx context.Context, ids []util.ID) error {
 	log.Debugf("indexing members: %s", ids)
 	var err error
 	tx, err := s.db.NewTx()
@@ -354,16 +356,16 @@ func (s *SearchEngine) indexMembers(ids []util.ID) error {
 	}
 	defer tx.Rollback()
 
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		return errors.Wrap(err, "cannot create db transaction")
 	}
 
-	curTlSeq := readDB.CurTimeLine().Number()
+	curTlSeq := readDBService.CurTimeLine(ctx).Number()
 
 	searchMembers := map[util.ID]*Member{}
 
-	members, err := readDB.MembersByIDs(context.Background(), curTlSeq, ids)
+	members, err := readDBService.MembersByIDs(context.Background(), curTlSeq, ids)
 	if err != nil {
 		return err
 	}
@@ -378,11 +380,11 @@ func (s *SearchEngine) indexMembers(ids []util.ID) error {
 			Email:    member.Email,
 		}
 	}
-	memberRoleEdgeGroups, err := readDB.MemberRoleEdges(curTlSeq, memberIDs)
+	memberRoleEdgeGroups, err := readDBService.MemberRoleEdges(ctx, curTlSeq, memberIDs)
 	if err != nil {
 		return err
 	}
-	memberCircleEdgeGroups, err := readDB.MemberCircleEdges(curTlSeq, memberIDs)
+	memberCircleEdgeGroups, err := readDBService.MemberCircleEdges(ctx, curTlSeq, memberIDs)
 	if err != nil {
 		return err
 	}
@@ -434,24 +436,24 @@ func (s *SearchEngine) indexMembers(ids []util.ID) error {
 	return nil
 }
 
-func (s *SearchEngine) indexRoles(ids []util.ID) error {
+func (s *SearchEngine) indexRoles(ctx context.Context, ids []util.ID) error {
 	tx, err := s.db.NewTx()
 	if err != nil {
 		return errors.Wrap(err, "cannot create db transaction")
 	}
 	defer tx.Rollback()
 
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		return errors.Wrap(err, "cannot create db transaction")
 	}
 
-	curTlSeq := readDB.CurTimeLine().Number()
+	curTlSeq := readDBService.CurTimeLine(ctx).Number()
 
 	searchRoles := map[util.ID]*Role{}
 
 	// TODO(sgotti) retrieve roles in batches
-	roles, err := readDB.Roles(context.Background(), curTlSeq, ids)
+	roles, err := readDBService.Roles(context.Background(), curTlSeq, ids)
 	if err != nil {
 		return err
 	}
@@ -461,11 +463,11 @@ func (s *SearchEngine) indexRoles(ids []util.ID) error {
 		rolesIDs = append(rolesIDs, r.ID)
 	}
 
-	rolesDomainsGroups, err := readDB.RoleDomains(curTlSeq, rolesIDs)
+	rolesDomainsGroups, err := readDBService.RoleDomains(ctx, curTlSeq, rolesIDs)
 	if err != nil {
 		return err
 	}
-	rolesAccountabilitiesGroups, err := readDB.RoleDomains(curTlSeq, rolesIDs)
+	rolesAccountabilitiesGroups, err := readDBService.RoleDomains(ctx, curTlSeq, rolesIDs)
 	if err != nil {
 		return err
 	}

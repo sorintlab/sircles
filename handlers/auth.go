@@ -127,16 +127,16 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	commandService := command.NewCommandService(tx, readDB, nil, nil, h.memberProvider != nil)
+	commandService := command.NewCommandService(tx, readDBService, nil, nil, h.memberProvider != nil)
 
 	// find a matching member using the matchUID reported by the authenticator
-	member, err := auth.FindMatchingMember(ctx, readDB, matchUID)
+	member, err := auth.FindMatchingMember(ctx, readDBService, matchUID)
 	if err != nil {
 		tx.Rollback()
 		log.Errorf("auth err: %+v", err)
@@ -194,7 +194,7 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		member, err = auth.FindMatchingMember(ctx, readDB, memberInfo.MatchUID)
+		member, err = auth.FindMatchingMember(ctx, readDBService, memberInfo.MatchUID)
 		if err != nil {
 			tx.Rollback()
 			log.Errorf("auth err: %+v", err)
@@ -323,6 +323,8 @@ func NewAuthHandler(db *db.DB, sd *TokenSigningData) func(http.Handler) http.Han
 }
 
 func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	token, err := jwtrequest.ParseFromRequest(r, jwtrequest.AuthorizationHeaderExtractor, func(token *jwt.Token) (interface{}, error) {
 		// Validate the alg
 		sd := h.tokenSigningData
@@ -358,7 +360,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
@@ -377,7 +379,7 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	member, err := readDB.MemberInternal(readDB.CurTimeLine().Number(), util.NewFromUUID(userID))
+	member, err := readDBService.Member(ctx, readDBService.CurTimeLine(ctx).Number(), util.NewFromUUID(userID))
 	if err != nil {
 		tx.Rollback()
 		log.Errorf("auth err: %+v", err)
@@ -396,7 +398,6 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	ctx := r.Context()
 	ctx = context.WithValue(ctx, "userid", userIDString)
 	log.Debugf("userid: %s", ctx.Value("userid"))
 	h.next.ServeHTTP(w, r.WithContext(ctx))

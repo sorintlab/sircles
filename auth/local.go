@@ -25,22 +25,22 @@ func (l *localAuthenticator) Login(ctx context.Context, loginName, password stri
 	}
 	defer tx.Rollback()
 
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		return "", err
 	}
 
 	var member *models.Member
 	if l.config.UseEmail {
-		member, err = readDB.AuthenticateEmailPassword(loginName, password)
+		member, err = readDBService.AuthenticateEmailPassword(ctx, loginName, password)
 	} else {
-		member, err = readDB.AuthenticateUserNamePassword(loginName, password)
+		member, err = readDBService.AuthenticateUserNamePassword(ctx, loginName, password)
 	}
 	if err != nil {
 		return "", err
 	}
 
-	matchUID, err := readDB.MemberMatchUID(ctx, member.ID)
+	matchUID, err := readDBService.MemberMatchUID(ctx, member.ID)
 	if err != nil {
 		return "", err
 	}

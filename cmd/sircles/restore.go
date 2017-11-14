@@ -134,14 +134,14 @@ func applyEvents(db *db.DB, events eventstore.Events) error {
 
 	es := eventstore.NewEventStore(tx)
 
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		return err
 	}
 	if err := es.RestoreEvents(events); err != nil {
 		return err
 	}
-	if err := readDB.ApplyEvents(events); err != nil {
+	if err := readDBService.ApplyEvents(events); err != nil {
 		return err
 	}
 	return nil

@@ -11,7 +11,7 @@ import (
 )
 
 type tensionResolver struct {
-	s        readdb.ReadDB
+	s        readdb.ReadDBService
 	t        *models.Tension
 	timeLine util.TimeLineNumber
 
@@ -63,7 +63,7 @@ func (r *tensionResolver) Member() (*memberResolver, error) {
 }
 
 type createTensionResultResolver struct {
-	s        readdb.ReadDB
+	s        readdb.ReadDBService
 	tension  *models.Tension
 	res      *change.CreateTensionResult
 	timeLine util.TimeLineNumber
@@ -103,7 +103,7 @@ func (r *createTensionChangeErrorsResolver) Description() *string {
 }
 
 type updateTensionResultResolver struct {
-	s        readdb.ReadDB
+	s        readdb.ReadDBService
 	tension  *models.Tension
 	res      *change.UpdateTensionResult
 	timeLine util.TimeLineNumber
@@ -143,7 +143,7 @@ func (r *updateTensionChangeErrorsResolver) Description() *string {
 }
 
 type closeTensionResultResolver struct {
-	s        readdb.ReadDB
+	s        readdb.ReadDBService
 	res      *change.CloseTensionResult
 	timeLine util.TimeLineNumber
 

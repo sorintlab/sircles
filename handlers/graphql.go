@@ -96,19 +96,19 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 	if h.config.AdminMember != "" {
-		readDB.SetForceAdminMemberUserName(h.config.AdminMember)
+		readDBService.SetForceAdminMemberUserName(h.config.AdminMember)
 	}
-	commandService := command.NewCommandService(tx, readDB, nil, nil, h.memberProvider != nil)
+	commandService := command.NewCommandService(tx, readDBService, nil, nil, h.memberProvider != nil)
 
 	ctx := r.Context()
-	ctx = context.WithValue(ctx, "service", readDB)
+	ctx = context.WithValue(ctx, "service", readDBService)
 	ctx = context.WithValue(ctx, "commandservice", commandService)
 	ctx = context.WithValue(ctx, "memberprovider", h.memberProvider)
 	ctx = context.WithValue(ctx, "searchEngine", h.searchEngine)

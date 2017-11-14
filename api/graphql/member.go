@@ -13,7 +13,7 @@ import (
 )
 
 type viewerResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	m          *models.Member
 	timeLineID util.TimeLineNumber
 
@@ -48,7 +48,7 @@ func (r *viewerResolver) MemberCirclePermissions(ctx context.Context, args *stru
 }
 
 type memberCirclePermissionsResolver struct {
-	s           readdb.ReadDB
+	s           readdb.ReadDBService
 	permissions *models.MemberCirclePermissions
 	timeLineID  util.TimeLineNumber
 
@@ -88,7 +88,7 @@ func (r *memberCirclePermissionsResolver) ManageRootCircle() bool {
 }
 
 type memberResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	m          *models.Member
 	timeLineID util.TimeLineNumber
 
@@ -164,7 +164,7 @@ func (r *memberResolver) Tensions() (*[]*tensionResolver, error) {
 }
 
 type memberConnectionResolver struct {
-	s           readdb.ReadDB
+	s           readdb.ReadDBService
 	members     []*models.Member
 	hasMoreData bool
 	timeLineID  util.TimeLineNumber
@@ -185,7 +185,7 @@ func (r *memberConnectionResolver) Edges() *[]*memberEdgeResolver {
 }
 
 type memberEdgeResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	member     *models.Member
 	timeLineID util.TimeLineNumber
 
@@ -201,7 +201,7 @@ func (r *memberEdgeResolver) Member() *memberResolver {
 }
 
 type createMemberResultResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	member     *models.Member
 	res        *change.CreateMemberResult
 	timeLineID util.TimeLineNumber
@@ -249,7 +249,7 @@ func (r *createMemberChangeErrorsResolver) Password() *string {
 }
 
 type updateMemberResultResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	member     *models.Member
 	res        *change.UpdateMemberResult
 	timeLineID util.TimeLineNumber

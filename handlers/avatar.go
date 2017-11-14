@@ -32,6 +32,8 @@ func NewAvatarHandler(db *db.DB) *avatarHandler {
 }
 
 func (h *avatarHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	vars := mux.Vars(r)
 	memberuid := vars["memberuid"]
 
@@ -77,14 +79,14 @@ func (h *avatarHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		log.Errorf("err: %v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 
-	avatar, err := readDB.MemberAvatarInternal(readDB.CurTimeLine().Number(), memberid)
+	avatar, err := readDBService.MemberAvatar(ctx, readDBService.CurTimeLine(ctx).Number(), memberid)
 	if err != nil {
 		log.Errorf("err: %v", err)
 		http.Error(w, "", http.StatusInternalServerError)
