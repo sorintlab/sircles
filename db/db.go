@@ -148,12 +148,13 @@ func NewDB(dbType Type, dbConnString string) (*DB, error) {
 	return db, nil
 }
 
-// Tx is wraps a wrappedTx to offer locking around exections of statements
-// (since the underlying sql driver doesn't support concurrent statements on the
-// same connection)
+// Tx wraps a wrappedTx to offer locking around concurrent executions of
+// statements (since the underlying sql driver doesn't support concurrent
+// statements on the same connection/transaction)
 type Tx struct {
 	wrappedTx *WrappedTx
 	l         sync.Mutex
+	db        *DB
 }
 
 // WrappedTx wraps a sql.Tx to apply some statement mutations before executing
@@ -167,23 +168,20 @@ func (db *DB) Close() error {
 	return db.db.Close()
 }
 
-func (db *DB) NewTx() (*Tx, error) {
-	tx, err := db.db.Begin()
-	if err != nil {
-		return nil, errors.WithStack(err)
+func (db *DB) NewUnstartedTx() *Tx {
+	return &Tx{
+		wrappedTx: &WrappedTx{data: db.data},
+		db:        db,
 	}
-	switch db.data.t {
-	case Postgres:
-		if _, err := tx.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
-			return nil, errors.WithStack(err)
-		}
+}
+
+func (db *DB) NewTx() (*Tx, error) {
+	tx := db.NewUnstartedTx()
+	if err := tx.Start(); err != nil {
+		return nil, err
 	}
 
-	return &Tx{
-		wrappedTx: &WrappedTx{
-			tx: tx, data: db.data,
-		},
-	}, nil
+	return tx, nil
 }
 
 func (db *DB) Do(f func(tx *Tx) error) error {
@@ -204,6 +202,21 @@ func (db *DB) Do(f func(tx *Tx) error) error {
 	return tx.Commit()
 }
 
+func (tx *Tx) Start() error {
+	wtx, err := tx.db.db.Begin()
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	switch tx.db.data.t {
+	case Postgres:
+		if _, err := wtx.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	tx.wrappedTx.tx = wtx
+	return nil
+}
+
 func (tx *Tx) lock() {
 	tx.l.Lock()
 }
@@ -213,10 +226,16 @@ func (tx *Tx) unlock() {
 }
 
 func (tx *Tx) Commit() error {
+	if tx.wrappedTx.tx == nil {
+		return nil
+	}
 	return tx.wrappedTx.tx.Commit()
 }
 
 func (tx *Tx) Rollback() error {
+	if tx.wrappedTx.tx == nil {
+		return nil
+	}
 	return tx.wrappedTx.tx.Rollback()
 }
 
