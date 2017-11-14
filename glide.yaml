@@ -11,14 +11,18 @@ import:
   version: v1.3.0
 - package: github.com/lib/pq
 - package: github.com/mattn/go-sqlite3
-  version: v1.2.0
+  version: v1.4.0
 - package: github.com/neelance/graphql-go
   version: 00c4c5743b2fff2500fbd0643d3a43e297139221
 - package: github.com/nicksrandall/dataloader
+  version: 9429e9b021235746853c24dde4a746bfaf1ac3fd
 - package: github.com/blevesearch/bleve
 - package: github.com/renstrom/shortuuid
 - package: github.com/satori/go.uuid
 - package: github.com/spf13/cobra
+  version: v0.0.1
+- package: github.com/spf13/pflag
+  version: v1.0.0
 - package: github.com/dchest/siphash
   version: v1.0.0
 - package: github.com/pkg/errors
