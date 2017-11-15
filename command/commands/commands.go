@@ -53,23 +53,29 @@ const (
 )
 
 type Command struct {
-	CommandType CommandType
-	IssuerID    util.ID
-	Data        interface{}
+	CommandType   CommandType
+	CausationID   util.ID
+	CorrelationID util.ID
+	IssuerID      util.ID
+	Data          interface{}
 }
 
 type CommandRaw struct {
-	CommandType CommandType
-	IssuerID    util.ID
-	Data        json.RawMessage
+	CommandType   CommandType
+	CausationID   util.ID
+	CorrelationID util.ID
+	IssuerID      util.ID
+	Data          json.RawMessage
 }
 
-func NewCommand(commandType CommandType, issuerID util.ID, commandData interface{}) *Command {
+func NewCommand(commandType CommandType, causationID, correlationID, issuerID util.ID, commandData interface{}) *Command {
 	// TODO(sgotti) detect commandType from commandData real type
 	return &Command{
-		CommandType: commandType,
-		IssuerID:    issuerID,
-		Data:        commandData,
+		CommandType:   commandType,
+		CausationID:   causationID,
+		CorrelationID: correlationID,
+		IssuerID:      issuerID,
+		Data:          commandData,
 	}
 }
 
@@ -86,6 +92,8 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 	}
 
 	c.CommandType = cr.CommandType
+	c.CausationID = cr.CausationID
+	c.CorrelationID = cr.CorrelationID
 	c.IssuerID = cr.IssuerID
 	c.Data = d
 

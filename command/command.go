@@ -231,7 +231,7 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeUpdateRootRole, callingMember.ID, &commands.UpdateRootRole{UpdateRootRoleChange: *c})
+	command := commands.NewCommand(commands.CommandTypeUpdateRootRole, correlationID, causationID, callingMember.ID, &commands.UpdateRootRole{UpdateRootRoleChange: *c})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -468,7 +468,7 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleCreateChildRole, callingMember.ID, &commands.CircleCreateChildRole{RoleID: roleID, CreateRoleChange: *c})
+	command := commands.NewCommand(commands.CommandTypeCircleCreateChildRole, correlationID, causationID, callingMember.ID, &commands.CircleCreateChildRole{RoleID: roleID, CreateRoleChange: *c})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -673,7 +673,7 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleUpdateChildRole, callingMember.ID, &commands.CircleUpdateChildRole{RoleID: roleID, UpdateRoleChange: *c})
+	command := commands.NewCommand(commands.CommandTypeCircleUpdateChildRole, correlationID, causationID, callingMember.ID, &commands.CircleUpdateChildRole{RoleID: roleID, UpdateRoleChange: *c})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -1154,7 +1154,7 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleDeleteChildRole, callingMember.ID, &commands.CircleDeleteChildRole{RoleID: roleID, DeleteRoleChange: *c})
+	command := commands.NewCommand(commands.CommandTypeCircleDeleteChildRole, correlationID, causationID, callingMember.ID, &commands.CircleDeleteChildRole{RoleID: roleID, DeleteRoleChange: *c})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -1246,7 +1246,7 @@ func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID ut
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeSetRoleAdditionalContent, callingMember.ID, commands.SetRoleAdditionalContent{RoleID: roleID, Content: content})
+	command := commands.NewCommand(commands.CommandTypeSetRoleAdditionalContent, correlationID, causationID, callingMember.ID, commands.SetRoleAdditionalContent{RoleID: roleID, Content: content})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -1440,7 +1440,7 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 		}
 	}
 
-	command := commands.NewCommand(commands.CommandTypeCreateMember, callingMemberID, commands.NewCommandCreateMember(c, passwordHash))
+	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, callingMemberID, commands.NewCommandCreateMember(c, passwordHash))
 
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.MemberAggregate, member.ID.String(), command)
 	events = events.AddEvent(commandEvent)
@@ -1616,7 +1616,7 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeUpdateMember, callingMember.ID, commands.NewCommandUpdateMember(c))
+	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateMember(c))
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.MemberAggregate, member.ID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -1692,7 +1692,7 @@ func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID
 		return nil, err
 	}
 
-	command := commands.NewCommand(commands.CommandTypeSetMemberPassword, callingMember.ID, commands.SetMemberPassword{MemberID: memberID, PasswordHash: passwordHash})
+	command := commands.NewCommand(commands.CommandTypeSetMemberPassword, correlationID, causationID, callingMember.ID, commands.SetMemberPassword{MemberID: memberID, PasswordHash: passwordHash})
 
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.MemberAggregate, memberID.String(), command)
 	events = events.AddEvent(commandEvent)
@@ -1767,7 +1767,7 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 	events := eventstore.NewEvents()
 
 	// NOTE(sgotti) Changing a password doesn't require a new timeline since there's no history of previous password, the command will have an empty timeline
-	command := commands.NewCommand(commands.CommandTypeSetMemberMatchUID, callingMemberID, commands.SetMemberMatchUID{MemberID: memberID, MatchUID: matchUID})
+	command := commands.NewCommand(commands.CommandTypeSetMemberMatchUID, correlationID, causationID, callingMemberID, commands.SetMemberMatchUID{MemberID: memberID, MatchUID: matchUID})
 
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.MemberAggregate, memberID.String(), command)
 	events = events.AddEvent(commandEvent)
@@ -1866,7 +1866,7 @@ func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTens
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCreateTension, callingMember.ID, commands.NewCommandCreateTension(c))
+	command := commands.NewCommand(commands.CommandTypeCreateTension, correlationID, causationID, callingMember.ID, commands.NewCommandCreateTension(c))
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.TensionAggregate, tension.ID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2011,7 +2011,7 @@ func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTens
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeUpdateTension, callingMember.ID, commands.NewCommandUpdateTension(c))
+	command := commands.NewCommand(commands.CommandTypeUpdateTension, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateTension(c))
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.TensionAggregate, tension.ID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2090,7 +2090,7 @@ func (s *CommandService) CloseTension(ctx context.Context, c *change.CloseTensio
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCloseTension, callingMember.ID, commands.NewCommandCloseTension(c))
+	command := commands.NewCommand(commands.CommandTypeCloseTension, correlationID, causationID, callingMember.ID, commands.NewCommandCloseTension(c))
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.TensionAggregate, tension.ID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2162,7 +2162,7 @@ func (s *CommandService) CircleAddDirectMember(ctx context.Context, roleID util.
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleAddDirectMember, callingMember.ID, &commands.CircleAddDirectMember{RoleID: roleID, MemberID: memberID})
+	command := commands.NewCommand(commands.CommandTypeCircleAddDirectMember, correlationID, causationID, callingMember.ID, &commands.CircleAddDirectMember{RoleID: roleID, MemberID: memberID})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2237,7 +2237,7 @@ func (s *CommandService) CircleRemoveDirectMember(ctx context.Context, roleID ut
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleRemoveDirectMember, callingMember.ID, &commands.CircleRemoveDirectMember{RoleID: roleID, MemberID: memberID})
+	command := commands.NewCommand(commands.CommandTypeCircleRemoveDirectMember, correlationID, causationID, callingMember.ID, &commands.CircleRemoveDirectMember{RoleID: roleID, MemberID: memberID})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2341,7 +2341,7 @@ func (s *CommandService) CircleSetLeadLinkMember(ctx context.Context, roleID, me
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleSetLeadLinkMember, callingMember.ID, &commands.CircleSetLeadLinkMember{RoleID: roleID, MemberID: memberID})
+	command := commands.NewCommand(commands.CommandTypeCircleSetLeadLinkMember, correlationID, causationID, callingMember.ID, &commands.CircleSetLeadLinkMember{RoleID: roleID, MemberID: memberID})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2474,7 +2474,7 @@ func (s *CommandService) CircleUnsetLeadLinkMember(ctx context.Context, roleID u
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleUnsetLeadLinkMember, callingMember.ID, &commands.CircleUnsetLeadLinkMember{RoleID: roleID})
+	command := commands.NewCommand(commands.CommandTypeCircleUnsetLeadLinkMember, correlationID, causationID, callingMember.ID, &commands.CircleUnsetLeadLinkMember{RoleID: roleID})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2561,7 +2561,7 @@ func (s *CommandService) CircleSetCoreRoleMember(ctx context.Context, roleType m
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleSetCoreRoleMember, callingMember.ID, &commands.CircleSetCoreRoleMember{RoleType: roleType, RoleID: roleID, MemberID: memberID, ElectionExpiration: electionExpiration})
+	command := commands.NewCommand(commands.CommandTypeCircleSetCoreRoleMember, correlationID, causationID, callingMember.ID, &commands.CircleSetCoreRoleMember{RoleType: roleType, RoleID: roleID, MemberID: memberID, ElectionExpiration: electionExpiration})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2670,7 +2670,7 @@ func (s *CommandService) CircleUnsetCoreRoleMember(ctx context.Context, roleType
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeCircleUnsetCoreRoleMember, callingMember.ID, &commands.CircleUnsetCoreRoleMember{RoleType: roleType, RoleID: roleID})
+	command := commands.NewCommand(commands.CommandTypeCircleUnsetCoreRoleMember, correlationID, causationID, callingMember.ID, &commands.CircleUnsetCoreRoleMember{RoleType: roleType, RoleID: roleID})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2769,7 +2769,7 @@ func (s *CommandService) RoleAddMember(ctx context.Context, roleID util.ID, memb
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeRoleAddMember, callingMember.ID, &commands.RoleAddMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
+	command := commands.NewCommand(commands.CommandTypeRoleAddMember, correlationID, causationID, callingMember.ID, &commands.RoleAddMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2851,7 +2851,7 @@ func (s *CommandService) RoleRemoveMember(ctx context.Context, roleID util.ID, m
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeRoleRemoveMember, callingMember.ID, &commands.RoleRemoveMember{RoleID: roleID, MemberID: memberID})
+	command := commands.NewCommand(commands.CommandTypeRoleRemoveMember, correlationID, causationID, callingMember.ID, &commands.RoleRemoveMember{RoleID: roleID, MemberID: memberID})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -2942,7 +2942,7 @@ func (s *CommandService) RoleUpdateMember(ctx context.Context, roleID util.ID, m
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeRoleUpdateMember, callingMember.ID, &commands.RoleUpdateMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
+	command := commands.NewCommand(commands.CommandTypeRoleUpdateMember, correlationID, causationID, callingMember.ID, &commands.RoleUpdateMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
@@ -3007,7 +3007,7 @@ func (s *CommandService) SetupRootRole() (util.ID, error) {
 	groupID := s.uidGenerator.UUID("")
 	events := eventstore.NewEvents()
 
-	command := commands.NewCommand(commands.CommandTypeSetupRootRole, util.NilID, &commands.SetupRootRole{})
+	command := commands.NewCommand(commands.CommandTypeSetupRootRole, correlationID, causationID, util.NilID, &commands.SetupRootRole{})
 	commandEvent := eventstore.NewEventCommandExecuted(&correlationID, &causationID, &groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), command)
 	events = events.AddEvent(commandEvent)
 
