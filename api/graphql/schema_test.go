@@ -301,10 +301,10 @@ func (tg *TestTimeGenerator) Now() time.Time {
 	return tg.t
 }
 
-func initRootRole(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDB, commandService *command.CommandService) {
+func initRootRole(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDBService, commandService *command.CommandService) {
 }
 
-func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDB, commandService *command.CommandService) {
+func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDBService, commandService *command.CommandService) {
 	membersIDs := map[string]util.ID{}
 	circlesIDs := map[string]util.ID{"rootRole": rootRoleID}
 	rolesIDs := map[string]util.ID{}
@@ -393,7 +393,7 @@ func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB rea
 
 }
 
-type initFunc func(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDB, commandService *command.CommandService)
+type initFunc func(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDBService, commandService *command.CommandService)
 
 type Test struct {
 	Query          string
@@ -493,11 +493,11 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	commandService := command.NewCommandService(tx, readDB, uidGenerator, timeGenerator, false)
+	commandService := command.NewCommandService(tx, readDBService, uidGenerator, timeGenerator, false)
 
 	rootRoleID, err := commandService.SetupRootRole()
 	if err != nil {
@@ -526,7 +526,7 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 
 	ctx = context.WithValue(ctx, "userid", initMembersIDs[0].String())
 
-	initFunc(ctx, t, rootRoleID, readDB, commandService)
+	initFunc(ctx, t, rootRoleID, readDBService, commandService)
 
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -638,13 +638,13 @@ func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.D
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	commandService := command.NewCommandService(tx, readDB, uidGenerator, tg, false)
+	commandService := command.NewCommandService(tx, readDBService, uidGenerator, tg, false)
 
-	ctx = context.WithValue(ctx, "service", readDB)
+	ctx = context.WithValue(ctx, "service", readDBService)
 	ctx = context.WithValue(ctx, "commandservice", commandService)
 	result := schema.Exec(ctx, test.Query, test.OperationName, variables)
 

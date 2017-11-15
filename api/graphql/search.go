@@ -12,7 +12,7 @@ import (
 )
 
 type searchResultResolver struct {
-	s   readdb.ReadDB
+	s   readdb.ReadDBService
 	res *bleve.SearchResult
 
 	dataLoaders *dataloader.DataLoaders

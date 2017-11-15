@@ -273,13 +273,14 @@ func initializeDB(db *db.DB, createInitialAdmin bool) error {
 }
 
 func doInit(tx *db.Tx, createInitialAdmin bool) error {
-	readDB, err := readdb.NewDBService(tx)
+	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		return err
 	}
-	commandService := command.NewCommandService(tx, readDB, nil, nil, false)
+	commandService := command.NewCommandService(tx, readDBService, nil, nil, false)
 
-	if !readDB.CurTimeLine().IsZero() {
+	ctx := context.Background()
+	if !readDBService.CurTimeLine(ctx).IsZero() {
 		return nil
 	}
 

@@ -14,14 +14,14 @@ import (
 )
 
 type roleResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	r          *models.Role
 	timeLineID util.TimeLineNumber
 
 	dataLoaders *dataloader.DataLoaders
 }
 
-func NewRoleResolver(s readdb.ReadDB, r *models.Role, timeLineID util.TimeLineNumber, dataLoaders *dataloader.DataLoaders) *roleResolver {
+func NewRoleResolver(s readdb.ReadDBService, r *models.Role, timeLineID util.TimeLineNumber, dataLoaders *dataloader.DataLoaders) *roleResolver {
 	return &roleResolver{s: s, r: r, timeLineID: timeLineID, dataLoaders: dataLoaders}
 }
 
@@ -197,7 +197,7 @@ func (r *roleResolver) Events(ctx context.Context, args *struct {
 	if args.First != nil {
 		first = int(*args.First)
 	}
-	events, hasMoreData, err := r.s.RoleEvents(r.r.ID, first, start, after)
+	events, hasMoreData, err := r.s.RoleEvents(ctx, r.r.ID, first, start, after)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func (r *roleResolver) Events(ctx context.Context, args *struct {
 }
 
 type domainResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	d          *models.Domain
 	timeLineID util.TimeLineNumber
 
@@ -221,7 +221,7 @@ func (r *domainResolver) Description() string {
 }
 
 type accountabilityResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	d          *models.Accountability
 	timeLineID util.TimeLineNumber
 
@@ -237,7 +237,7 @@ func (r *accountabilityResolver) Description() string {
 }
 
 type roleAdditionalContentResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	c          *models.RoleAdditionalContent
 	timeLineID util.TimeLineNumber
 
@@ -249,7 +249,7 @@ func (r *roleAdditionalContentResolver) Content() string {
 }
 
 type roleMemberEdgeResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	m          *models.RoleMemberEdge
 	timeLineID util.TimeLineNumber
 
@@ -276,7 +276,7 @@ func (r *roleMemberEdgeResolver) ElectionExpiration() *graphql.Time {
 }
 
 type memberRoleEdgeResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	m          *models.MemberRoleEdge
 	timeLineID util.TimeLineNumber
 
@@ -303,7 +303,7 @@ func (r *memberRoleEdgeResolver) ElectionExpiration() *graphql.Time {
 }
 
 type circleMemberEdgeResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	m          *models.CircleMemberEdge
 	timeLineID util.TimeLineNumber
 
@@ -345,7 +345,7 @@ func (r *circleMemberEdgeResolver) RepLink() *[]*roleResolver {
 }
 
 type memberCircleEdgeResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	m          *models.MemberCircleEdge
 	timeLineID util.TimeLineNumber
 
@@ -387,7 +387,7 @@ func (r *memberCircleEdgeResolver) RepLink() *[]*roleResolver {
 }
 
 type updateRootRoleResultResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	role       *models.Role
 	res        *change.UpdateRootRoleResult
 	timeLineID util.TimeLineNumber
@@ -459,7 +459,7 @@ func (r *updateRootRoleChangeErrorsResolver) Purpose() *string {
 }
 
 type createRoleResultResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	role       *models.Role
 	res        *change.CreateRoleResult
 	timeLineID util.TimeLineNumber
@@ -519,7 +519,7 @@ func (r *createRoleChangeErrorsResolver) Purpose() *string {
 }
 
 type updateRoleResultResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	role       *models.Role
 	res        *change.UpdateRoleResult
 	timeLineID util.TimeLineNumber
@@ -591,7 +591,7 @@ func (r *updateRoleChangeErrorsResolver) Purpose() *string {
 }
 
 type deleteRoleResultResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	res        *change.DeleteRoleResult
 	timeLineID util.TimeLineNumber
 
@@ -639,7 +639,7 @@ func (r *updateAccountabilityChangeErrorsResolver) Description() *string {
 }
 
 type setRoleAdditionalContentResultResolver struct {
-	s          readdb.ReadDB
+	s          readdb.ReadDBService
 	c          *models.RoleAdditionalContent
 	res        *change.SetRoleAdditionalContentResult
 	timeLineID util.TimeLineNumber

@@ -29,33 +29,33 @@ type tlDataLoaders struct {
 	TensionRole           dataloader.Interface
 }
 
-func NewTlDataLoaders(ctx context.Context, s readdb.ReadDB, timeLine util.TimeLineNumber) *tlDataLoaders {
+func NewTlDataLoaders(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) *tlDataLoaders {
 	return &tlDataLoaders{
-		RoleDomains:           dataloader.NewBatchedLoader(RoleDomainsBatchFn(s, timeLine)),
-		RoleAccountabilities:  dataloader.NewBatchedLoader(RoleAccountabilitiesBatchFn(s, timeLine)),
-		RoleAdditionalContent: dataloader.NewBatchedLoader(RoleAdditionalContentBatchFn(s, timeLine)),
-		ChildRole:             dataloader.NewBatchedLoader(ChildRoleBatchFn(s, timeLine)),
-		RoleMemberEdges:       dataloader.NewBatchedLoader(RoleMemberEdgesBatchFn(s, timeLine)),
-		MemberRoleEdges:       dataloader.NewBatchedLoader(MemberRoleEdgesBatchFn(s, timeLine)),
-		CircleMemberEdges:     dataloader.NewBatchedLoader(CircleMemberEdgesBatchFn(s, timeLine)),
-		MemberCircleEdges:     dataloader.NewBatchedLoader(MemberCircleEdgesBatchFn(s, timeLine)),
-		RoleParent:            dataloader.NewBatchedLoader(RoleParentBatchFn(s, timeLine)),
-		RoleParents:           dataloader.NewBatchedLoader(RoleParentsBatchFn(s, timeLine)),
+		RoleDomains:           dataloader.NewBatchedLoader(RoleDomainsBatchFn(ctx, s, timeLine)),
+		RoleAccountabilities:  dataloader.NewBatchedLoader(RoleAccountabilitiesBatchFn(ctx, s, timeLine)),
+		RoleAdditionalContent: dataloader.NewBatchedLoader(RoleAdditionalContentBatchFn(ctx, s, timeLine)),
+		ChildRole:             dataloader.NewBatchedLoader(ChildRoleBatchFn(ctx, s, timeLine)),
+		RoleMemberEdges:       dataloader.NewBatchedLoader(RoleMemberEdgesBatchFn(ctx, s, timeLine)),
+		MemberRoleEdges:       dataloader.NewBatchedLoader(MemberRoleEdgesBatchFn(ctx, s, timeLine)),
+		CircleMemberEdges:     dataloader.NewBatchedLoader(CircleMemberEdgesBatchFn(ctx, s, timeLine)),
+		MemberCircleEdges:     dataloader.NewBatchedLoader(MemberCircleEdgesBatchFn(ctx, s, timeLine)),
+		RoleParent:            dataloader.NewBatchedLoader(RoleParentBatchFn(ctx, s, timeLine)),
+		RoleParents:           dataloader.NewBatchedLoader(RoleParentsBatchFn(ctx, s, timeLine)),
 		MemberTensions:        dataloader.NewBatchedLoader(MemberTensionsBatchFn(ctx, s, timeLine)),
-		TensionMember:         dataloader.NewBatchedLoader(TensionMemberBatchFn(s, timeLine)),
-		RoleTensions:          dataloader.NewBatchedLoader(RoleTensionsBatchFn(s, timeLine)),
-		TensionRole:           dataloader.NewBatchedLoader(TensionRoleBatchFn(s, timeLine)),
+		TensionMember:         dataloader.NewBatchedLoader(TensionMemberBatchFn(ctx, s, timeLine)),
+		RoleTensions:          dataloader.NewBatchedLoader(RoleTensionsBatchFn(ctx, s, timeLine)),
+		TensionRole:           dataloader.NewBatchedLoader(TensionRoleBatchFn(ctx, s, timeLine)),
 	}
 }
 
 type DataLoaders struct {
 	ctx   context.Context
-	s     readdb.ReadDB
+	s     readdb.ReadDBService
 	tldls map[util.TimeLineNumber]*tlDataLoaders
 	l     sync.Mutex
 }
 
-func NewDataLoaders(ctx context.Context, s readdb.ReadDB) *DataLoaders {
+func NewDataLoaders(ctx context.Context, s readdb.ReadDBService) *DataLoaders {
 	return &DataLoaders{
 		ctx:   ctx,
 		s:     s,
@@ -86,13 +86,13 @@ func keysToIDs(ikeys []string) []util.ID {
 	return keys
 }
 
-func RoleDomainsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func RoleDomainsBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.RoleDomains(timeLine, keys)
+		groups, err := s.RoleDomains(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -113,13 +113,13 @@ func RoleDomainsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikey
 	}
 }
 
-func RoleAccountabilitiesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func RoleAccountabilitiesBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.RoleAccountabilities(timeLine, keys)
+		groups, err := s.RoleAccountabilities(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -140,13 +140,13 @@ func RoleAccountabilitiesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) 
 	}
 }
 
-func RoleAdditionalContentBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func RoleAdditionalContentBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.RolesAdditionalContent(timeLine, keys)
+		groups, err := s.RolesAdditionalContent(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -167,13 +167,13 @@ func RoleAdditionalContentBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber)
 	}
 }
 
-func ChildRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func ChildRoleBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.ChildRoles(timeLine, keys)
+		groups, err := s.ChildRoles(ctx, timeLine, keys, []string{"role.name"})
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -194,13 +194,13 @@ func ChildRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys 
 	}
 }
 
-func RoleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func RoleMemberEdgesBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.RoleMemberEdges(timeLine, keys)
+		groups, err := s.RoleMemberEdges(ctx, timeLine, keys, nil)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -221,13 +221,13 @@ func RoleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(
 	}
 }
 
-func CircleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func CircleMemberEdgesBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.CircleMemberEdges(timeLine, keys)
+		groups, err := s.CircleMemberEdges(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -248,13 +248,13 @@ func CircleMemberEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) fun
 	}
 }
 
-func MemberCircleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func MemberCircleEdgesBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.MemberCircleEdges(timeLine, keys)
+		groups, err := s.MemberCircleEdges(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -275,13 +275,13 @@ func MemberCircleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) fun
 	}
 }
 
-func MemberRoleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func MemberRoleEdgesBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.MemberRoleEdges(timeLine, keys)
+		groups, err := s.MemberRoleEdges(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -302,13 +302,13 @@ func MemberRoleEdgesBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(
 	}
 }
 
-func RoleParentBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func RoleParentBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.RoleParent(timeLine, keys)
+		groups, err := s.RoleParent(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -329,13 +329,13 @@ func RoleParentBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys
 	}
 }
 
-func RoleParentsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func RoleParentsBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.RoleParents(timeLine, keys)
+		groups, err := s.RoleParents(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -356,13 +356,13 @@ func RoleParentsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikey
 	}
 }
 
-func TensionMemberBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func TensionMemberBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.TensionMember(timeLine, keys)
+		groups, err := s.TensionMember(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -383,7 +383,7 @@ func TensionMemberBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ik
 	}
 }
 
-func MemberTensionsBatchFn(ctx context.Context, s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func MemberTensionsBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
@@ -410,13 +410,13 @@ func MemberTensionsBatchFn(ctx context.Context, s readdb.ReadDB, timeLine util.T
 	}
 }
 
-func TensionRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func TensionRoleBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.TensionRole(timeLine, keys)
+		groups, err := s.TensionRole(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})
@@ -437,13 +437,13 @@ func TensionRoleBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikey
 	}
 }
 
-func RoleTensionsBatchFn(s readdb.ReadDB, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
+func RoleTensionsBatchFn(ctx context.Context, s readdb.ReadDBService, timeLine util.TimeLineNumber) func(ikeys []string) []*dataloader.Result {
 	return func(ikeys []string) []*dataloader.Result {
 		var results []*dataloader.Result
 
 		keys := keysToIDs(ikeys)
 
-		groups, err := s.RoleTensions(timeLine, keys)
+		groups, err := s.RoleTensions(ctx, timeLine, keys)
 		if err != nil {
 			for _ = range keys {
 				results = append(results, &dataloader.Result{Error: err})

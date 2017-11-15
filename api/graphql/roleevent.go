@@ -11,7 +11,7 @@ import (
 )
 
 type roleEventConnectionResolver struct {
-	s           readdb.ReadDB
+	s           readdb.ReadDBService
 	events      []*models.RoleEvent
 	hasMoreData bool
 
@@ -38,7 +38,7 @@ func (r *roleEventConnectionResolver) Edges() *[]*roleEventEdgeResolver {
 }
 
 type roleEventEdgeResolver struct {
-	s     readdb.ReadDB
+	s     readdb.ReadDBService
 	event *models.RoleEvent
 
 	dataLoaders *dataloader.DataLoaders
@@ -59,7 +59,7 @@ func (r *roleEventEdgeResolver) Event() *roleEventResolver {
 }
 
 type roleEvent interface {
-	TimeLine() (*timeLineResolver, error)
+	TimeLine(context.Context) (*timeLineResolver, error)
 	Type() string
 }
 
@@ -73,15 +73,15 @@ func (r *roleEventResolver) ToRoleEventCircleChangesApplied() (*roleEventCircleC
 }
 
 type roleEventCircleChangesAppliedResolver struct {
-	s         readdb.ReadDB
+	s         readdb.ReadDBService
 	event     *models.RoleEvent
 	eventData *models.RoleEventCircleChangesApplied
 
 	dataLoaders *dataloader.DataLoaders
 }
 
-func (r *roleEventCircleChangesAppliedResolver) TimeLine() (*timeLineResolver, error) {
-	tl, err := r.s.TimeLine(r.event.TimeLineID)
+func (r *roleEventCircleChangesAppliedResolver) TimeLine(ctx context.Context) (*timeLineResolver, error) {
+	tl, err := r.s.TimeLine(ctx, r.event.TimeLineID)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (r *roleEventCircleChangesAppliedResolver) RolesFromCircle() *[]*roleParent
 }
 
 type roleChangeResolver struct {
-	s         readdb.ReadDB
+	s         readdb.ReadDBService
 	event     *models.RoleEvent
 	eventData *models.RoleEventCircleChangesApplied
 
@@ -240,7 +240,7 @@ func (r *roleChangeResolver) RolesMovedToParent(ctx context.Context) (*[]*roleRe
 }
 
 type roleParentChangeResolver struct {
-	s         readdb.ReadDB
+	s         readdb.ReadDBService
 	event     *models.RoleEvent
 	eventData *models.RoleEventCircleChangesApplied
 

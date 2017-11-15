@@ -55,7 +55,7 @@ func GetMemberInfo(ctx context.Context, authenticator Authenticator, memberProvi
 	return memberInfo, nil
 }
 
-func FindMatchingMember(ctx context.Context, readDB readdb.ReadDB, matchUID string) (*models.Member, error) {
+func FindMatchingMember(ctx context.Context, readDB readdb.ReadDBService, matchUID string) (*models.Member, error) {
 	member, err := readDB.MemberByMatchUID(ctx, matchUID)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func FindMatchingMember(ctx context.Context, readDB readdb.ReadDB, matchUID stri
 	if member == nil {
 		// if we cannot find an user with matchUID try by username and accept it
 		// only if the returned member has an empty matchUID
-		member, err = readDB.MemberByUserName(ctx, readDB.CurTimeLine().Number(), matchUID)
+		member, err = readDB.MemberByUserName(ctx, readDB.CurTimeLine(ctx).Number(), matchUID)
 		if err != nil {
 			return nil, err
 		}
@@ -80,7 +80,7 @@ func FindMatchingMember(ctx context.Context, readDB readdb.ReadDB, matchUID stri
 	return member, nil
 }
 
-func ImportMember(ctx context.Context, readDB readdb.ReadDB, commandService *command.CommandService, memberProvider MemberProvider, loginName string) (*models.Member, error) {
+func ImportMember(ctx context.Context, readDB readdb.ReadDBService, commandService *command.CommandService, memberProvider MemberProvider, loginName string) (*models.Member, error) {
 	if memberProvider == nil {
 		return nil, errors.New("nil member provider")
 	}
