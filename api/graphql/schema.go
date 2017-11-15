@@ -605,7 +605,7 @@ func unmarshalUID(uid graphql.ID) (util.ID, error) {
 }
 
 type TimeLineCursor struct {
-	TimeLineID    util.TimeLineNumber
+	TimeLineID    string
 	AggregateType string
 	AggregateID   *util.ID
 }
@@ -1371,7 +1371,11 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 		if err != nil {
 			return nil, err
 		}
-		timeLineID = cursor.TimeLineID
+		tl, err := strconv.ParseInt(cursor.TimeLineID, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		timeLineID = util.TimeLineNumber(tl)
 		aggregateType = cursor.AggregateType
 		aggregateID = cursor.AggregateID
 	}
@@ -1380,7 +1384,11 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 		if err != nil {
 			return nil, err
 		}
-		timeLineID = cursor.TimeLineID
+		tl, err := strconv.ParseInt(cursor.TimeLineID, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		timeLineID = util.TimeLineNumber(tl)
 		aggregateType = cursor.AggregateType
 		aggregateID = cursor.AggregateID
 	}
