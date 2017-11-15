@@ -362,6 +362,9 @@ func (s *SearchEngine) indexMembers(ctx context.Context, ids []util.ID) error {
 	}
 
 	curTlSeq := readDBService.CurTimeLine(ctx).Number()
+	if curTlSeq < 0 {
+		return nil
+	}
 
 	searchMembers := map[util.ID]*Member{}
 
@@ -449,6 +452,9 @@ func (s *SearchEngine) indexRoles(ctx context.Context, ids []util.ID) error {
 	}
 
 	curTlSeq := readDBService.CurTimeLine(ctx).Number()
+	if curTlSeq < 0 {
+		return nil
+	}
 
 	searchRoles := map[util.ID]*Role{}
 
