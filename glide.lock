@@ -1,10 +1,10 @@
-hash: 674beb3062549d338f5708596d76e5229011a43079bdefd1ac9e5fdf7af5684a
-updated: 2017-05-11T10:06:34.220435228+02:00
+hash: 262a4213b34b2b1e60ef432b396e2673d852316828219b40c4401ca2824c0b5e
+updated: 2017-11-14T18:20:00.202639674+01:00
 imports:
 - name: github.com/asaskevich/govalidator
-  version: 38ddb4612a5dfc2878731749ee825853d9f0aaa1
+  version: 7664702784775e51966f0885f5cd27435916517b
 - name: github.com/blevesearch/bleve
-  version: 5c9915c6f41b05317744a2ec0340a2f71973025a
+  version: 6eea5b78da004393b1d06b8c88d1bed9ca0a94b2
   subpackages:
   - analysis
   - analysis/analyzer/custom
@@ -48,7 +48,11 @@ imports:
   version: 144418e1475d8bf7abbdc48583500f1a20c62ea7
   repo: https://github.com/boltdb/bolt
 - name: github.com/coreos/go-oidc
-  version: c797a55f1c1001ec3169f1d0fbb4c5523563bec6
+  version: a93f71fdfe73d2c0f5413c0565eea0af6523a6df
+- name: github.com/davecgh/go-spew
+  version: 346938d642f2ec3594ed81d874461961cd0faa76
+  subpackages:
+  - spew
 - name: github.com/dchest/siphash
   version: 42ba037e748c9062a75e0924705c43b893edefcd
 - name: github.com/dgrijalva/jwt-go
@@ -85,7 +89,7 @@ imports:
 - name: github.com/Masterminds/squirrel
   version: 20f192218cf52a73397fa2df45bdda720f3e47c8
 - name: github.com/mattn/go-sqlite3
-  version: ca5e3819723d8eeaf170ad510e7da1d6d2e94a08
+  version: ed69081a91fd053f17672236b0dd52ba7485e1a3
 - name: github.com/neelance/graphql-go
   version: 00c4c5743b2fff2500fbd0643d3a43e297139221
   subpackages:
@@ -104,14 +108,14 @@ imports:
 - name: github.com/nicksrandall/dataloader
   version: 9429e9b021235746853c24dde4a746bfaf1ac3fd
 - name: github.com/opentracing/opentracing-go
-  version: eaaf4e1eeb7a5373b38e70901270c83577dc6fb9
+  version: 1361b9cd60be79c4c3a7fa9841b3c132e40066a7
   subpackages:
   - ext
   - log
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/pquerna/cachecontrol
-  version: 9299cc36e57c32f83e47ffb3c25d8a3dec10ea0b
+  version: 0dec1b30a0215bb68605dfc568e8855066c9202d
   subpackages:
   - cacheobject
 - name: github.com/renstrom/shortuuid
@@ -119,14 +123,14 @@ imports:
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/spf13/cobra
-  version: 9c28e4bbd74e5c3ed7aacbc552b2cab7cfdfe744
+  version: 7b2c5ac9fc04fc5efafb60700713d4fa609b777b
 - name: github.com/spf13/pflag
-  version: 6fd2ff4ff8dfcdf5556fbdc0ac0284408274b1a7
+  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
 - name: github.com/steveyen/gtreap
   version: 0abe01ef9be25c4aedc174758ec2d917314d6d70
   repo: https://github.com/steveyen/gtreap
 - name: go.uber.org/atomic
-  version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
+  version: 54f72d32435d760d5604f17a82e2435b28dc4ba5
 - name: go.uber.org/zap
   version: 6a4e056f2cc954cfec3581729e758909604b3f76
   subpackages:
@@ -137,12 +141,14 @@ imports:
   - internal/multierror
   - zapcore
 - name: golang.org/x/crypto
-  version: a7ead6ddf06233883deca151dffaef2effbf498f
+  version: 9f005a07e0d31d45e6656d241bb5c0f2efd4bc94
   subpackages:
   - bcrypt
   - blowfish
+  - ed25519
+  - ed25519/internal/edwards25519
 - name: golang.org/x/image
-  version: f483456c9f61fd7c1e170033d58ef22ff5ffe291
+  version: f7e31b4ea2e3413ab91b4e7d2dc83e5f8d19a44c
   subpackages:
   - bmp
   - tiff
@@ -153,7 +159,7 @@ imports:
   subpackages:
   - context
 - name: golang.org/x/oauth2
-  version: ad516a297a9f2a74ecc244861b298c94bdd28b9d
+  version: a6bd8cefa1811bd24b86f8902872e4e8225f74c4
   subpackages:
   - internal
 - name: golang.org/x/sys
@@ -161,7 +167,7 @@ imports:
   subpackages:
   - unix
 - name: google.golang.org/appengine
-  version: 170382fa85b10b94728989dfcf6cc818b335c952
+  version: 24e4144ec923c2374f6b06610c0df16a9222c3d9
   subpackages:
   - internal
   - internal/base
@@ -171,14 +177,14 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: gopkg.in/asn1-ber.v1
-  version: 4e86f4367175e39f69d9358a5f17b4dda270378d
+  version: 379148ca0225df7a432012b8df0355c2a2063ac0
 - name: gopkg.in/ldap.v2
   version: 8168ee085ee43257585e50c6441aadf54ecb2c9f
 - name: gopkg.in/square/go-jose.v2
-  version: af13e1fbc7ac2df7f7eab54e5177104d546d0e9c
+  version: f8f38de21b4dcd69d0413faf231983f5fd6634b1
   subpackages:
   - cipher
   - json
 - name: gopkg.in/yaml.v2
-  version: a83829b6f1293c91addabc89d0571c246397bbf4
+  version: 53feefa2559fb8dfa8d81baad31be332c97d6c77
 testImports: []

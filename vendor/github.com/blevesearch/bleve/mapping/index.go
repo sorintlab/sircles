@@ -289,7 +289,12 @@ func (im *IndexMappingImpl) UnmarshalJSON(data []byte) error {
 }
 
 func (im *IndexMappingImpl) determineType(data interface{}) string {
-	// first see if the object implements Classifier
+	// first see if the object implements bleveClassifier
+	bleveClassifier, ok := data.(bleveClassifier)
+	if ok {
+		return bleveClassifier.BleveType()
+	}
+	// next see if the object implements Classifier
 	classifier, ok := data.(Classifier)
 	if ok {
 		return classifier.Type()
@@ -313,7 +318,7 @@ func (im *IndexMappingImpl) MapDocument(doc *document.Document, data interface{}
 
 		// see if the _all field was disabled
 		allMapping := docMapping.documentMappingForPath("_all")
-		if allMapping == nil || (allMapping.Enabled != false) {
+		if allMapping == nil || allMapping.Enabled {
 			field := document.NewCompositeFieldWithIndexingOptions("_all", true, []string{}, walkContext.excludedFromAll, document.IndexField|document.IncludeTermVectors)
 			doc.AddField(field)
 		}
