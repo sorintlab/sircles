@@ -8,11 +8,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// We have int64 timelines but javascript cannot handle 64 bit
-// number without using external libraries. A solution will be to marshall into
-// a string thought we'll find problems only when reaching a timeline > than 2^53, probably
-// never.
-// TODO(sgotti) need to document this and find a way to handle it in the ui
 type TimeLineNumber int64
 
 func (_ TimeLineNumber) ImplementsGraphQLType(name string) bool {
@@ -35,6 +30,13 @@ func (tl *TimeLineNumber) UnmarshalGraphQL(input interface{}) error {
 	default:
 		return errors.Errorf("wrong type: %T", input)
 	}
+}
+
+// We have int64 timelines but javascript cannot handle 64 bit
+// number without using external libraries. So we marshal it into
+// a string.
+func (tln TimeLineNumber) MarshalJSON() ([]byte, error) {
+	return strconv.AppendQuote(nil, strconv.FormatInt(int64(tln), 10)), nil
 }
 
 type TimeLine struct {

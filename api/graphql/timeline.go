@@ -1,6 +1,8 @@
 package graphql
 
 import (
+	"strconv"
+
 	"github.com/sorintlab/sircles/dataloader"
 	"github.com/sorintlab/sircles/readdb"
 	"github.com/sorintlab/sircles/util"
@@ -40,7 +42,7 @@ type timeLineEdgeResolver struct {
 }
 
 func (r *timeLineEdgeResolver) Cursor() (string, error) {
-	return marshalTimeLineCursor(&TimeLineCursor{TimeLineID: r.timeLine.Number(), AggregateType: r.aggregateType, AggregateID: r.aggregateID})
+	return marshalTimeLineCursor(&TimeLineCursor{TimeLineID: strconv.FormatInt(int64(r.timeLine.Number()), 10), AggregateType: r.aggregateType, AggregateID: r.aggregateID})
 }
 
 func (r *timeLineEdgeResolver) TimeLine() *timeLineResolver {
