@@ -20,4 +20,10 @@ if [ ! $(command -v glide-vc) ]; then
 fi
 
 glide update --strip-vendor
+
+### update sqlite3 bindings since the current ones (as of 15 Nov 2017) are old
+pushd vendor/github.com/mattn/go-sqlite3
+go run ./tool/upgrade.go
+popd
+
 glide-vc --only-code --no-tests
