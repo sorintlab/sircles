@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"regexp"
 	"sync"
@@ -168,6 +169,10 @@ type WrappedTx struct {
 
 func (db *DB) Close() error {
 	return db.db.Close()
+}
+
+func (db *DB) Conn() (*sql.Conn, error) {
+	return db.db.Conn(context.TODO())
 }
 
 func (db *DB) NewUnstartedTx() *Tx {
