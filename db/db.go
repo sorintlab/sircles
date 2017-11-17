@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
 
 var log = slog.S()
@@ -22,6 +22,8 @@ const (
 	Sqlite3     Type = "sqlite3"
 	Postgres    Type = "postgres"
 	CockRoachDB Type = "cockroachdb"
+
+	maxTxRetries = 30
 )
 
 type dbData struct {
@@ -185,6 +187,25 @@ func (db *DB) NewTx() (*Tx, error) {
 }
 
 func (db *DB) Do(f func(tx *Tx) error) error {
+	retries := 0
+	for {
+		err := db.do(f)
+		cerr := errors.Cause(err)
+		if sqerr, ok := cerr.(sqlite3.Error); ok {
+			log.Debugf("sqlite3 err Code: %d", sqerr.Code)
+			if sqerr.Code == sqlite3.ErrBusy {
+				retries++
+				if retries < maxTxRetries {
+					time.Sleep(time.Duration(retries%10) * time.Millisecond)
+					continue
+				}
+			}
+		}
+		return err
+	}
+}
+
+func (db *DB) do(f func(tx *Tx) error) error {
 	tx, err := db.NewTx()
 	if err != nil {
 		return err
