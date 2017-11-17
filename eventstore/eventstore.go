@@ -330,12 +330,12 @@ func (s *EventStore) GetEvent(id *util.ID) (*Event, error) {
 	return events[0], nil
 }
 
-func (s *EventStore) GetEvents(start, count int64) ([]*Event, error) {
+func (s *EventStore) GetEvents(start int64, count uint64) ([]*Event, error) {
 	if count < 1 {
 		return []*Event{}, nil
 	}
 
-	sb := eventSelect.Where(sq.And{sq.GtOrEq{"sequencenumber": start}, sq.LtOrEq{"sequencenumber": start + count - 1}}).OrderBy("sequencenumber ASC")
+	sb := eventSelect.Where(sq.GtOrEq{"sequencenumber": start}).OrderBy("sequencenumber ASC").Limit(count)
 
 	q, args, err := sb.ToSql()
 	if err != nil {
