@@ -346,7 +346,7 @@ func (s *EventStore) GetEvents(start int64, count uint64) ([]*Event, error) {
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
-			return errors.Wrap(err, "failed to execute query")
+			return errors.WithMessage(err, "failed to execute query")
 		}
 		events, err = scanEvents(rows)
 		return err
@@ -355,6 +355,86 @@ func (s *EventStore) GetEvents(start int64, count uint64) ([]*Event, error) {
 		return nil, err
 	}
 	return events, nil
+}
+
+func (s *EventStore) AggregateTypeGetEvents(aggregateType AggregateType, start int64, count uint64) ([]*Event, error) {
+	if count < 1 {
+		return []*Event{}, nil
+	}
+
+	sb := eventSelect.Where(sq.And{sq.Eq{"aggregatetype": aggregateType}, sq.GtOrEq{"sequencenumber": start}}).OrderBy("sequencenumber ASC").Limit(count)
+
+	q, args, err := sb.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to build query")
+	}
+
+	var events Events
+	err = s.tx.Do(func(tx *db.WrappedTx) error {
+		rows, err := tx.Query(q, args...)
+		if err != nil {
+			return errors.WithMessage(err, "failed to execute query")
+		}
+		events, err = scanEvents(rows)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (s *EventStore) StreamGetEvents(aggregateID string, startVersion int64, count uint64) ([]*Event, error) {
+	if count < 1 {
+		return []*Event{}, nil
+	}
+
+	sb := eventSelect.Where(sq.And{sq.Eq{"aggregateid": aggregateID}, sq.GtOrEq{"version": startVersion}}).OrderBy("version ASC").Limit(count)
+
+	q, args, err := sb.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to build query")
+	}
+
+	var events Events
+	err = s.tx.Do(func(tx *db.WrappedTx) error {
+		rows, err := tx.Query(q, args...)
+		if err != nil {
+			return errors.WithMessage(err, "failed to execute query")
+		}
+		events, err = scanEvents(rows)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (s *EventStore) StreamGetLastEvent(aggregateID string) (*Event, error) {
+	sb := eventSelect.Where(sq.And{sq.Eq{"aggregateid": aggregateID}}).OrderBy("version DESC").Limit(1)
+
+	q, args, err := sb.ToSql()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to build query")
+	}
+
+	var events Events
+	err = s.tx.Do(func(tx *db.WrappedTx) error {
+		rows, err := tx.Query(q, args...)
+		if err != nil {
+			return errors.WithMessage(err, "failed to execute query")
+		}
+		events, err = scanEvents(rows)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(events) == 0 {
+		return nil, nil
+	}
+	return events[0], nil
 }
 
 func (s *EventStore) AggregateVersion(aggregateID string) (int64, error) {
