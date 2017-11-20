@@ -93,9 +93,9 @@ func restore(cmd *cobra.Command, args []string) error {
 
 	dec := json.NewDecoder(f)
 
-	events := eventstore.Events{}
+	events := []*eventstore.StoredEvent{}
 	for {
-		var event *eventstore.Event
+		var event *eventstore.StoredEvent
 		err := dec.Decode(&event)
 		if err != nil {
 			log.Fatal(err)
@@ -108,7 +108,7 @@ func restore(cmd *cobra.Command, args []string) error {
 			if err := applyEvents(db, events); err != nil {
 				return err
 			}
-			events = eventstore.Events{}
+			events = []*eventstore.StoredEvent{}
 		}
 		if !hasMore {
 			break
@@ -118,7 +118,7 @@ func restore(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func applyEvents(db *db.DB, events eventstore.Events) error {
+func applyEvents(db *db.DB, events []*eventstore.StoredEvent) error {
 	tx, err := db.NewTx()
 	if err != nil {
 		return err

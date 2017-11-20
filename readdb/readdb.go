@@ -75,7 +75,7 @@ type ReadDBService interface {
 
 	RoleEvents(ctx context.Context, roleID util.ID, first int, start, after util.TimeLineNumber) ([]*models.RoleEvent, bool, error)
 
-	ApplyEvents(events eventstore.Events) error
+	ApplyEvents(events []*eventstore.StoredEvent) error
 }
 
 type GenericSqlizer string
@@ -2405,7 +2405,7 @@ func (s *readDBService) MemberCirclePermissions(ctx context.Context, tl util.Tim
 	return cp, nil
 }
 
-func (s *readDBService) ApplyEvents(events eventstore.Events) error {
+func (s *readDBService) ApplyEvents(events []*eventstore.StoredEvent) error {
 	for _, event := range events {
 		if err := s.ApplyEvent(event); err != nil {
 			return err
@@ -2419,15 +2419,20 @@ func (s *readDBService) ApplyEvents(events eventstore.Events) error {
 	return nil
 }
 
-func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
+func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 	//log.Infof("event: %#+v", event)
 	ctx := context.Background()
 
-	if event.GroupID == nil {
+	metaData, err := event.UnmarshalMetaData()
+	if err != nil {
+		return err
+	}
+
+	if metaData.GroupID == nil {
 		return nil
 	}
 
-	tl, err := s.TimeLineForGroupID(ctx, *event.GroupID)
+	tl, err := s.TimeLineForGroupID(ctx, *metaData.GroupID)
 	if err != nil {
 		return err
 	}
@@ -2438,7 +2443,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 		err := s.tx.Do(func(tx *db.WrappedTx) error {
-			if _, err := tx.Exec("insert into timeline (timestamp, groupid, aggregatetype, aggregateid) values ($1, $2, $3, $4)", tl.Timestamp, event.GroupID.UUID, event.AggregateType, event.AggregateID); err != nil {
+			if _, err := tx.Exec("insert into timeline (timestamp, groupid, aggregatetype, aggregateid) values ($1, $2, $3, $4)", tl.Timestamp, metaData.GroupID.UUID, event.AggregateType, event.AggregateID); err != nil {
 				return errors.Wrap(err, "failed to insert timeline")
 			}
 			return nil
@@ -2448,7 +2453,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 		// Reread to inserted timeline since postgres has a microsecond resolution
 		// so the nanosecond will be lost
-		tl, err = s.TimeLineForGroupID(ctx, *event.GroupID)
+		tl, err = s.TimeLineForGroupID(ctx, *metaData.GroupID)
 		if err != nil {
 			return err
 		}
@@ -2462,12 +2467,17 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 	}
 	//log.Infof("tl:", tl)
 
+	data, err := event.UnmarshalData()
+	if err != nil {
+		return err
+	}
+
 	switch event.EventType {
 	case eventstore.EventTypeCommandExecuted:
 	case eventstore.EventTypeCommandExecutionFinished:
 
 	case eventstore.EventTypeRoleCreated:
-		data := event.Data.(*eventstore.EventRoleCreated)
+		data := data.(*eventstore.EventRoleCreated)
 		// We have to calculate the role depth
 		depth := int32(0)
 		if data.ParentRoleID != nil {
@@ -2496,7 +2506,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleDeleted:
-		data := event.Data.(*eventstore.EventRoleDeleted)
+		data := data.(*eventstore.EventRoleDeleted)
 		proleGroups, err := s.RoleParent(ctx, tl.Number(), []util.ID{data.RoleID})
 		if err != nil {
 			return err
@@ -2512,7 +2522,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleUpdated:
-		data := event.Data.(*eventstore.EventRoleUpdated)
+		data := data.(*eventstore.EventRoleUpdated)
 		// We have to retrieve the current role depth
 		crole, err := s.Role(ctx, tl.Number(), data.RoleID)
 		if err != nil {
@@ -2532,7 +2542,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleDomainCreated:
-		data := event.Data.(*eventstore.EventRoleDomainCreated)
+		data := data.(*eventstore.EventRoleDomainCreated)
 		domainID := data.DomainID
 		domain := &models.Domain{
 			Description: data.Description,
@@ -2545,7 +2555,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleDomainUpdated:
-		data := event.Data.(*eventstore.EventRoleDomainUpdated)
+		data := data.(*eventstore.EventRoleDomainUpdated)
 		domainID := data.DomainID
 		domain := &models.Domain{
 			Description: data.Description,
@@ -2555,7 +2565,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleDomainDeleted:
-		data := event.Data.(*eventstore.EventRoleDomainDeleted)
+		data := data.(*eventstore.EventRoleDomainDeleted)
 		domainID := data.DomainID
 		if err := s.deleteVertex(tl.Number(), vertexClassDomain, domainID); err != nil {
 			return err
@@ -2565,7 +2575,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleAccountabilityCreated:
-		data := event.Data.(*eventstore.EventRoleAccountabilityCreated)
+		data := data.(*eventstore.EventRoleAccountabilityCreated)
 		accountabilityID := data.AccountabilityID
 		accountability := &models.Accountability{
 			Description: data.Description,
@@ -2578,7 +2588,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleAccountabilityUpdated:
-		data := event.Data.(*eventstore.EventRoleAccountabilityUpdated)
+		data := data.(*eventstore.EventRoleAccountabilityUpdated)
 		accountabilityID := data.AccountabilityID
 		accountability := &models.Accountability{
 			Description: data.Description,
@@ -2588,7 +2598,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleAccountabilityDeleted:
-		data := event.Data.(*eventstore.EventRoleAccountabilityDeleted)
+		data := data.(*eventstore.EventRoleAccountabilityDeleted)
 		accountabilityID := data.AccountabilityID
 		if err := s.deleteVertex(tl.Number(), vertexClassAccountability, accountabilityID); err != nil {
 			return err
@@ -2598,7 +2608,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleAdditionalContentSet:
-		data := event.Data.(*eventstore.EventRoleAdditionalContentSet)
+		data := data.(*eventstore.EventRoleAdditionalContentSet)
 		roleAdditionalContent := &models.RoleAdditionalContent{
 			Content: data.Content,
 		}
@@ -2607,67 +2617,67 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleChangedParent:
-		data := event.Data.(*eventstore.EventRoleChangedParent)
+		data := data.(*eventstore.EventRoleChangedParent)
 		if err := s.changeRoleParent(ctx, tl.Number(), data.RoleID, data.ParentRoleID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleMemberAdded:
-		data := event.Data.(*eventstore.EventRoleMemberAdded)
+		data := data.(*eventstore.EventRoleMemberAdded)
 		if err := s.roleAddMember(tl.Number(), data.RoleID, data.MemberID, data.Focus, data.NoCoreMember); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleMemberUpdated:
-		data := event.Data.(*eventstore.EventRoleMemberUpdated)
+		data := data.(*eventstore.EventRoleMemberUpdated)
 		if err := s.roleUpdateMember(tl.Number(), data.RoleID, data.MemberID, data.Focus, data.NoCoreMember); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeRoleMemberRemoved:
-		data := event.Data.(*eventstore.EventRoleMemberRemoved)
+		data := data.(*eventstore.EventRoleMemberRemoved)
 		if err := s.roleRemoveMember(tl.Number(), data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleDirectMemberAdded:
-		data := event.Data.(*eventstore.EventCircleDirectMemberAdded)
+		data := data.(*eventstore.EventCircleDirectMemberAdded)
 		if err := s.addEdge(tl.Number(), edgeClassCircleDirectMember, data.MemberID, data.RoleID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleDirectMemberRemoved:
-		data := event.Data.(*eventstore.EventCircleDirectMemberRemoved)
+		data := data.(*eventstore.EventCircleDirectMemberRemoved)
 		if err := s.circleRemoveDirectMember(tl.Number(), data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleLeadLinkMemberSet:
-		data := event.Data.(*eventstore.EventCircleLeadLinkMemberSet)
+		data := data.(*eventstore.EventCircleLeadLinkMemberSet)
 		if err := s.addEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.LeadLinkRoleID, nil, false, nil); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleLeadLinkMemberUnset:
-		data := event.Data.(*eventstore.EventCircleLeadLinkMemberUnset)
+		data := data.(*eventstore.EventCircleLeadLinkMemberUnset)
 		if err := s.deleteEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.LeadLinkRoleID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleCoreRoleMemberSet:
-		data := event.Data.(*eventstore.EventCircleCoreRoleMemberSet)
+		data := data.(*eventstore.EventCircleCoreRoleMemberSet)
 		if err := s.addEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.CoreRoleID, nil, false, data.ElectionExpiration); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeCircleCoreRoleMemberUnset:
-		data := event.Data.(*eventstore.EventCircleCoreRoleMemberUnset)
+		data := data.(*eventstore.EventCircleCoreRoleMemberUnset)
 		if err := s.deleteEdge(tl.Number(), edgeClassRoleMember, data.MemberID, data.CoreRoleID); err != nil {
 			return err
 		}
 
 	case eventstore.EventTypeTensionCreated:
-		data := event.Data.(*eventstore.EventTensionCreated)
+		data := data.(*eventstore.EventTensionCreated)
 		tensionID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2691,7 +2701,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeTensionUpdated:
-		data := event.Data.(*eventstore.EventTensionUpdated)
+		data := data.(*eventstore.EventTensionUpdated)
 		tensionID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2708,7 +2718,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeTensionRoleChanged:
-		data := event.Data.(*eventstore.EventTensionRoleChanged)
+		data := data.(*eventstore.EventTensionRoleChanged)
 		tensionID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2726,7 +2736,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeTensionClosed:
-		data := event.Data.(*eventstore.EventTensionClosed)
+		data := data.(*eventstore.EventTensionClosed)
 		tensionID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2747,7 +2757,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeMemberCreated:
-		data := event.Data.(*eventstore.EventMemberCreated)
+		data := data.(*eventstore.EventMemberCreated)
 		memberID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2764,7 +2774,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeMemberUpdated:
-		data := event.Data.(*eventstore.EventMemberUpdated)
+		data := data.(*eventstore.EventMemberUpdated)
 		memberID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2781,7 +2791,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeMemberPasswordSet:
-		data := event.Data.(*eventstore.EventMemberPasswordSet)
+		data := data.(*eventstore.EventMemberPasswordSet)
 		memberID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2800,7 +2810,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 			return err
 		}
 	case eventstore.EventTypeMemberAvatarSet:
-		data := event.Data.(*eventstore.EventMemberAvatarSet)
+		data := data.(*eventstore.EventMemberAvatarSet)
 		memberID, err := util.IDFromString(event.AggregateID)
 		if err != nil {
 			return err
@@ -2820,7 +2830,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 	// populate read side events
 	switch event.EventType {
 	case eventstore.EventTypeCommandExecuted:
-		data := event.Data.(*eventstore.EventCommandExecuted)
+		data := data.(*eventstore.EventCommandExecuted)
 		command := data.Command
 
 		createChildChangeAppliedEvent := false
@@ -2853,7 +2863,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeCommandExecutionFinished:
 
 	case eventstore.EventTypeRoleCreated:
-		data := event.Data.(*eventstore.EventRoleCreated)
+		data := data.(*eventstore.EventRoleCreated)
 
 		// skip core roles
 		if data.RoleType.IsCoreRoleType() {
@@ -2887,7 +2897,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleDeleted:
-		data := event.Data.(*eventstore.EventRoleDeleted)
+		data := data.(*eventstore.EventRoleDeleted)
 
 		proleGroups, err := s.RoleParent(ctx, tl.Number()-1, []util.ID{data.RoleID})
 		if err != nil {
@@ -2929,7 +2939,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleUpdated:
-		data := event.Data.(*eventstore.EventRoleUpdated)
+		data := data.(*eventstore.EventRoleUpdated)
 
 		proleGroups, err := s.RoleParent(ctx, tl.Number(), []util.ID{data.RoleID})
 		if err != nil {
@@ -2968,49 +2978,28 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		// frontend.
 
 	case eventstore.EventTypeRoleDomainCreated:
-		//data := event.Data.(*eventstore.EventRoleDomainCreated)
-		//if err := s.addRoleEvent(event, data.TimeLine, data.RoleID); err != nil {
-		//	return err
-		//}
+		//data := data.(*eventstore.EventRoleDomainCreated)
 
 	case eventstore.EventTypeRoleDomainUpdated:
-		//data := event.Data.(*eventstore.EventRoleDomainUpdated)
-		//if err := s.addRoleEvent(event, data.TimeLine, data.RoleID); err != nil {
-		//	return err
-		//}
+		//data := data.(*eventstore.EventRoleDomainUpdated)
 
 	case eventstore.EventTypeRoleDomainDeleted:
-		//data := event.Data.(*eventstore.EventRoleDomainDeleted)
-		//if err := s.addRoleEvent(event, data.TimeLine, data.RoleID); err != nil {
-		//	return err
-		//}
+		//data := data.(*eventstore.EventRoleDomainDeleted)
 
 	case eventstore.EventTypeRoleAccountabilityCreated:
-		//data := event.Data.(*eventstore.EventRoleAccountabilityCreated)
-		//if err := s.addRoleEvent(event, data.TimeLine, data.RoleID); err != nil {
-		//	return err
-		//}
+		//data := data.(*eventstore.EventRoleAccountabilityCreated)
 
 	case eventstore.EventTypeRoleAccountabilityUpdated:
-		//data := event.Data.(*eventstore.EventRoleAccountabilityUpdated)
-		//if err := s.addRoleEvent(event, data.TimeLine, data.RoleID); err != nil {
-		//	return err
-		//}
+		//data := data.(*eventstore.EventRoleAccountabilityUpdated)
 
 	case eventstore.EventTypeRoleAccountabilityDeleted:
-		//data := event.Data.(*eventstore.EventRoleAccountabilityDeleted)
-		//if err := s.addRoleEvent(event, data.TimeLine, data.RoleID); err != nil {
-		//	return err
-		//}
+		//data := data.(*eventstore.EventRoleAccountabilityDeleted)
 
 	case eventstore.EventTypeRoleAdditionalContentSet:
-		//data := event.Data.(*eventstore.EventRoleAdditionalContentSet)
-		//if err := s.addRoleEvent(event, data.TimeLine, data.RoleID); err != nil {
-		//	return err
-		//}
+		//data := data.(*eventstore.EventRoleAdditionalContentSet)
 
 	case eventstore.EventTypeRoleChangedParent:
-		data := event.Data.(*eventstore.EventRoleChangedParent)
+		data := data.(*eventstore.EventRoleChangedParent)
 
 		prole, err := s.Role(ctx, tl.Number(), *data.ParentRoleID)
 		if err != nil {
@@ -3097,55 +3086,55 @@ func (s *readDBService) ApplyEvent(event *eventstore.Event) error {
 		}
 
 	case eventstore.EventTypeRoleMemberAdded:
-		//data := event.Data.(*eventstore.EventRoleMemberAdded)
+		//data := data.(*eventstore.EventRoleMemberAdded)
 
 	case eventstore.EventTypeRoleMemberUpdated:
-		//data := event.Data.(*eventstore.EventRoleMemberUpdated)
+		//data := data.(*eventstore.EventRoleMemberUpdated)
 
 	case eventstore.EventTypeRoleMemberRemoved:
-		//data := event.Data.(*eventstore.EventRoleMemberRemoved)
+		//data := data.(*eventstore.EventRoleMemberRemoved)
 
 	case eventstore.EventTypeCircleDirectMemberAdded:
-		//data := event.Data.(*eventstore.EventCircleDirectMemberAdded)
+		//data := data.(*eventstore.EventCircleDirectMemberAdded)
 
 	case eventstore.EventTypeCircleDirectMemberRemoved:
-		//data := event.Data.(*eventstore.EventCircleDirectMemberRemoved)
+		//data := data.(*eventstore.EventCircleDirectMemberRemoved)
 
 	case eventstore.EventTypeCircleLeadLinkMemberSet:
-		//data := event.Data.(*eventstore.EventCircleLeadLinkMemberSet)
+		//data := data.(*eventstore.EventCircleLeadLinkMemberSet)
 
 	case eventstore.EventTypeCircleLeadLinkMemberUnset:
-		//data := event.Data.(*eventstore.EventCircleLeadLinkMemberUnset)
+		//data := data.(*eventstore.EventCircleLeadLinkMemberUnset)
 
 	case eventstore.EventTypeCircleCoreRoleMemberSet:
-		//data := event.Data.(*eventstore.EventCircleCoreRoleMemberSet)
+		//data := data.(*eventstore.EventCircleCoreRoleMemberSet)
 
 	case eventstore.EventTypeCircleCoreRoleMemberUnset:
-		//data := event.Data.(*eventstore.EventCircleCoreRoleMemberUnset)
+		//data := data.(*eventstore.EventCircleCoreRoleMemberUnset)
 
 	case eventstore.EventTypeTensionCreated:
-		//data := event.Data.(*eventstore.EventTensionCreated)
+		//data := data.(*eventstore.EventTensionCreated)
 
 	case eventstore.EventTypeTensionUpdated:
-		//data := event.Data.(*eventstore.EventTensionUpdated)
+		//data := data.(*eventstore.EventTensionUpdated)
 
 	case eventstore.EventTypeTensionRoleChanged:
-		//data := event.Data.(*eventstore.EventTensionRoleChanged)
+		//data := data.(*eventstore.EventTensionRoleChanged)
 
 	case eventstore.EventTypeTensionClosed:
-		//data := event.Data.(*eventstore.EventTensionClosed)
+		//data := data.(*eventstore.EventTensionClosed)
 
 	case eventstore.EventTypeMemberCreated:
-		//data := event.Data.(*eventstore.EventMemberCreated)
+		//data := data.(*eventstore.EventMemberCreated)
 
 	case eventstore.EventTypeMemberUpdated:
-		//data := event.Data.(*eventstore.EventMemberUpdated)
+		//data := data.(*eventstore.EventMemberUpdated)
 
 	case eventstore.EventTypeMemberPasswordSet:
-		//data := event.Data.(*eventstore.EventMemberPasswordSet)
+		//data := data.(*eventstore.EventMemberPasswordSet)
 
 	case eventstore.EventTypeMemberAvatarSet:
-		//data := event.Data.(*eventstore.EventMemberAvatarSet)
+		//data := data.(*eventstore.EventMemberAvatarSet)
 
 	default:
 		panic(errors.Errorf("unhandled event: %s", event.EventType))
@@ -3166,26 +3155,6 @@ func (s *readDBService) getCircleChangesAppliedRoleEvent(ctx context.Context, ti
 		return nil, nil
 	}
 	return roleEvents[0], nil
-}
-
-func (s *readDBService) getEventCausingCommand(ctx context.Context, event *eventstore.Event) (*eventstore.Event, error) {
-	es := eventstore.NewEventStore(s.tx)
-	var commandEvent *eventstore.Event
-	// find the event generating command, we walk the various groupID until we find an event of type command
-	for {
-		e, err := es.GetEvent(event.GroupID)
-		if err != nil {
-			return nil, err
-		}
-		if e == nil {
-			break
-		}
-		if e.EventType == eventstore.EventTypeCommandExecuted {
-			commandEvent = e
-			break
-		}
-	}
-	return commandEvent, nil
 }
 
 func (s *readDBService) changeRoleParent(ctx context.Context, nextTl util.TimeLineNumber, roleID util.ID, newParentID *util.ID) error {

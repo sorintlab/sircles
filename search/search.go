@@ -222,26 +222,31 @@ func (s *SearchEngine) delete(ids []util.ID) error {
 	return nil
 }
 
-func (s *SearchEngine) HandlEvent(event *eventstore.Event) error {
+func (s *SearchEngine) HandlEvent(event *eventstore.StoredEvent) error {
 	reindexRoles := []util.ID{}
 	deleteRoles := []util.ID{}
 	reindexMembers := []util.ID{}
 	deleteMembers := []util.ID{}
+
+	data, err := event.UnmarshalData()
+	if err != nil {
+		return err
+	}
 
 	switch event.EventType {
 	case eventstore.EventTypeCommandExecuted:
 	case eventstore.EventTypeCommandExecutionFinished:
 
 	case eventstore.EventTypeRoleCreated:
-		data := event.Data.(*eventstore.EventRoleCreated)
+		data := data.(*eventstore.EventRoleCreated)
 		reindexRoles = append(reindexRoles, data.RoleID)
 
 	case eventstore.EventTypeRoleDeleted:
-		data := event.Data.(*eventstore.EventRoleDeleted)
+		data := data.(*eventstore.EventRoleDeleted)
 		deleteRoles = append(deleteRoles, data.RoleID)
 
 	case eventstore.EventTypeRoleUpdated:
-		data := event.Data.(*eventstore.EventRoleUpdated)
+		data := data.(*eventstore.EventRoleUpdated)
 		reindexRoles = append(reindexRoles, data.RoleID)
 
 	case eventstore.EventTypeRoleDomainCreated:
@@ -261,39 +266,39 @@ func (s *SearchEngine) HandlEvent(event *eventstore.Event) error {
 	case eventstore.EventTypeRoleChangedParent:
 
 	case eventstore.EventTypeRoleMemberAdded:
-		data := event.Data.(*eventstore.EventRoleMemberAdded)
+		data := data.(*eventstore.EventRoleMemberAdded)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeRoleMemberUpdated:
-		data := event.Data.(*eventstore.EventRoleMemberUpdated)
+		data := data.(*eventstore.EventRoleMemberUpdated)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeRoleMemberRemoved:
-		data := event.Data.(*eventstore.EventRoleMemberRemoved)
+		data := data.(*eventstore.EventRoleMemberRemoved)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeCircleDirectMemberAdded:
-		data := event.Data.(*eventstore.EventCircleDirectMemberAdded)
+		data := data.(*eventstore.EventCircleDirectMemberAdded)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeCircleDirectMemberRemoved:
-		data := event.Data.(*eventstore.EventCircleDirectMemberRemoved)
+		data := data.(*eventstore.EventCircleDirectMemberRemoved)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeCircleLeadLinkMemberSet:
-		data := event.Data.(*eventstore.EventCircleLeadLinkMemberSet)
+		data := data.(*eventstore.EventCircleLeadLinkMemberSet)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeCircleLeadLinkMemberUnset:
-		data := event.Data.(*eventstore.EventCircleLeadLinkMemberUnset)
+		data := data.(*eventstore.EventCircleLeadLinkMemberUnset)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeCircleCoreRoleMemberSet:
-		data := event.Data.(*eventstore.EventCircleCoreRoleMemberSet)
+		data := data.(*eventstore.EventCircleCoreRoleMemberSet)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeCircleCoreRoleMemberUnset:
-		data := event.Data.(*eventstore.EventCircleCoreRoleMemberUnset)
+		data := data.(*eventstore.EventCircleCoreRoleMemberUnset)
 		reindexMembers = append(reindexMembers, data.MemberID)
 
 	case eventstore.EventTypeTensionCreated:
