@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/db"
 	"github.com/sorintlab/sircles/eventstore"
 	slog "github.com/sorintlab/sircles/log"
@@ -2473,9 +2472,6 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 	}
 
 	switch event.EventType {
-	case eventstore.EventTypeCommandExecuted:
-	case eventstore.EventTypeCommandExecutionFinished:
-
 	case eventstore.EventTypeRoleCreated:
 		data := data.(*eventstore.EventRoleCreated)
 		// We have to calculate the role depth
@@ -2829,39 +2825,6 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	// populate read side events
 	switch event.EventType {
-	case eventstore.EventTypeCommandExecuted:
-		data := data.(*eventstore.EventCommandExecuted)
-		command := data.Command
-
-		createChildChangeAppliedEvent := false
-		var roleID, issuerID util.ID
-		switch command.CommandType {
-		case commands.CommandTypeCircleCreateChildRole:
-			createChildChangeAppliedEvent = true
-			data := command.Data.(*commands.CircleCreateChildRole)
-			roleID = data.RoleID
-			issuerID = command.IssuerID
-		case commands.CommandTypeCircleUpdateChildRole:
-			createChildChangeAppliedEvent = true
-			data := command.Data.(*commands.CircleUpdateChildRole)
-			roleID = data.RoleID
-			issuerID = command.IssuerID
-		case commands.CommandTypeCircleDeleteChildRole:
-			createChildChangeAppliedEvent = true
-			data := command.Data.(*commands.CircleDeleteChildRole)
-			roleID = data.RoleID
-			issuerID = command.IssuerID
-		}
-
-		if createChildChangeAppliedEvent {
-			roleEvent := models.NewRoleEventCircleChangesApplied(tl.Number(), event.ID, roleID, issuerID)
-			if err := s.insertRoleEvent(roleEvent); err != nil {
-				return err
-			}
-		}
-
-	case eventstore.EventTypeCommandExecutionFinished:
-
 	case eventstore.EventTypeRoleCreated:
 		data := data.(*eventstore.EventRoleCreated)
 
@@ -2870,34 +2833,52 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 			break
 		}
 
-		if data.ParentRoleID != nil {
-			prole, err := s.Role(ctx, tl.Number(), *data.ParentRoleID)
-			if err != nil {
-				return err
-			}
-			if prole == nil {
-				return errors.Errorf("role with id %s doesn't exist", *data.ParentRoleID)
-			}
+		if data.ParentRoleID == nil {
+			break
+		}
 
-			roleEvent, err := s.getCircleChangesAppliedRoleEvent(ctx, tl.Number(), prole.ID)
-			if err != nil {
-				return err
-			}
-			eventData := roleEvent.Data.(*models.RoleEventCircleChangesApplied)
-			changedRole, ok := eventData.ChangedRoles[data.RoleID]
-			if ok {
-				panic("roleevent: role already defined in eventdata")
-			}
-			changedRole = models.RoleChange{ChangeType: models.ChangeTypeNew}
-			eventData.ChangedRoles[data.RoleID] = changedRole
+		pRoleID := *data.ParentRoleID
+		issuerID := metaData.CommandIssuerID
 
-			if err := s.insertRoleEvent(roleEvent); err != nil {
-				return err
-			}
+		if issuerID == nil {
+			break
+		}
+
+		roleEvent, err := s.getCircleChangesAppliedRoleEvent(ctx, tl.Number(), pRoleID)
+		if err != nil {
+			return err
+		}
+		if roleEvent == nil {
+			roleEvent = models.NewRoleEventCircleChangesApplied(tl.Number(), pRoleID, *issuerID)
+		}
+
+		prole, err := s.Role(ctx, tl.Number(), *data.ParentRoleID)
+		if err != nil {
+			return err
+		}
+		if prole == nil {
+			return errors.Errorf("role with id %s doesn't exist", *data.ParentRoleID)
+		}
+
+		eventData := roleEvent.Data.(*models.RoleEventCircleChangesApplied)
+		changedRole, ok := eventData.ChangedRoles[data.RoleID]
+		if ok {
+			panic("roleevent: role already defined in eventdata")
+		}
+		changedRole = models.RoleChange{ChangeType: models.ChangeTypeNew}
+		eventData.ChangedRoles[data.RoleID] = changedRole
+
+		if err := s.insertRoleEvent(roleEvent); err != nil {
+			return err
 		}
 
 	case eventstore.EventTypeRoleDeleted:
 		data := data.(*eventstore.EventRoleDeleted)
+
+		issuerID := metaData.CommandIssuerID
+		if issuerID == nil {
+			break
+		}
 
 		proleGroups, err := s.RoleParent(ctx, tl.Number()-1, []util.ID{data.RoleID})
 		if err != nil {
@@ -2910,7 +2891,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 			return err
 		}
 		if roleEvent == nil {
-			break
+			roleEvent = models.NewRoleEventCircleChangesApplied(tl.Number(), prole.ID, *issuerID)
 		}
 
 		eventData := roleEvent.Data.(*models.RoleEventCircleChangesApplied)
@@ -2952,12 +2933,17 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 			break
 		}
 
+		issuerID := metaData.CommandIssuerID
+		if issuerID == nil {
+			break
+		}
+
 		roleEvent, err := s.getCircleChangesAppliedRoleEvent(ctx, tl.Number(), prole.ID)
 		if err != nil {
 			return err
 		}
 		if roleEvent == nil {
-			break
+			roleEvent = models.NewRoleEventCircleChangesApplied(tl.Number(), prole.ID, *issuerID)
 		}
 
 		eventData := roleEvent.Data.(*models.RoleEventCircleChangesApplied)
@@ -3001,6 +2987,11 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 	case eventstore.EventTypeRoleChangedParent:
 		data := data.(*eventstore.EventRoleChangedParent)
 
+		issuerID := metaData.CommandIssuerID
+		if issuerID == nil {
+			break
+		}
+
 		prole, err := s.Role(ctx, tl.Number(), *data.ParentRoleID)
 		if err != nil {
 			return err
@@ -3023,32 +3014,34 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		if err != nil {
 			return err
 		}
-		if roleEvent != nil {
-			eventData := roleEvent.Data.(*models.RoleEventCircleChangesApplied)
+		if roleEvent == nil {
+			roleEvent = models.NewRoleEventCircleChangesApplied(tl.Number(), prole.ID, *issuerID)
+		}
 
-			eventData.RolesToCircle[data.RoleID] = prevProle.ID
+		eventData := roleEvent.Data.(*models.RoleEventCircleChangesApplied)
 
-			changedRole, ok := eventData.ChangedRoles[data.RoleID]
-			if !ok {
-				changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
-			}
-			changedRole.Moved = &models.RoleParentChange{
-				PreviousParent: prevProle.ID,
-				NewParent:      prole.ID,
-			}
-			eventData.ChangedRoles[data.RoleID] = changedRole
+		eventData.RolesToCircle[data.RoleID] = prevProle.ID
 
-			// Add the role moved to parent from the affected role (the old parent)
-			changedRole, ok = eventData.ChangedRoles[prevProle.ID]
-			if !ok {
-				changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
-			}
-			changedRole.RolesMovedToParent = append(changedRole.RolesMovedToParent, data.RoleID)
-			eventData.ChangedRoles[prevProle.ID] = changedRole
+		changedRole, ok := eventData.ChangedRoles[data.RoleID]
+		if !ok {
+			changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
+		}
+		changedRole.Moved = &models.RoleParentChange{
+			PreviousParent: prevProle.ID,
+			NewParent:      prole.ID,
+		}
+		eventData.ChangedRoles[data.RoleID] = changedRole
 
-			if err := s.insertRoleEvent(roleEvent); err != nil {
-				return err
-			}
+		// Add the role moved to parent from the affected role (the old parent)
+		changedRole, ok = eventData.ChangedRoles[prevProle.ID]
+		if !ok {
+			changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
+		}
+		changedRole.RolesMovedToParent = append(changedRole.RolesMovedToParent, data.RoleID)
+		eventData.ChangedRoles[prevProle.ID] = changedRole
+
+		if err := s.insertRoleEvent(roleEvent); err != nil {
+			return err
 		}
 
 		// handle the role moved from the role on which the role change command
@@ -3057,32 +3050,33 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		if err != nil {
 			return err
 		}
-		if roleEvent != nil {
-			eventData := roleEvent.Data.(*models.RoleEventCircleChangesApplied)
+		if roleEvent == nil {
+			roleEvent = models.NewRoleEventCircleChangesApplied(tl.Number(), prevProle.ID, *issuerID)
+		}
+		eventData = roleEvent.Data.(*models.RoleEventCircleChangesApplied)
 
-			eventData.RolesFromCircle[data.RoleID] = prole.ID
+		eventData.RolesFromCircle[data.RoleID] = prole.ID
 
-			changedRole, ok := eventData.ChangedRoles[data.RoleID]
-			if !ok {
-				changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
-			}
-			changedRole.Moved = &models.RoleParentChange{
-				PreviousParent: prevProle.ID,
-				NewParent:      prole.ID,
-			}
-			eventData.ChangedRoles[data.RoleID] = changedRole
+		changedRole, ok = eventData.ChangedRoles[data.RoleID]
+		if !ok {
+			changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
+		}
+		changedRole.Moved = &models.RoleParentChange{
+			PreviousParent: prevProle.ID,
+			NewParent:      prole.ID,
+		}
+		eventData.ChangedRoles[data.RoleID] = changedRole
 
-			// Add the role moved from parent to the affected role (the new parent)
-			changedRole, ok = eventData.ChangedRoles[prole.ID]
-			if !ok {
-				changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
-			}
-			changedRole.RolesMovedFromParent = append(changedRole.RolesMovedFromParent, data.RoleID)
-			eventData.ChangedRoles[prole.ID] = changedRole
+		// Add the role moved from parent to the affected role (the new parent)
+		changedRole, ok = eventData.ChangedRoles[prole.ID]
+		if !ok {
+			changedRole = models.RoleChange{ChangeType: models.ChangeTypeUpdated}
+		}
+		changedRole.RolesMovedFromParent = append(changedRole.RolesMovedFromParent, data.RoleID)
+		eventData.ChangedRoles[prole.ID] = changedRole
 
-			if err := s.insertRoleEvent(roleEvent); err != nil {
-				return err
-			}
+		if err := s.insertRoleEvent(roleEvent); err != nil {
+			return err
 		}
 
 	case eventstore.EventTypeRoleMemberAdded:

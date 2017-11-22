@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 
+	uuid "github.com/satori/go.uuid"
 	"github.com/sorintlab/sircles/util"
 )
 
@@ -29,10 +30,10 @@ func GetRoleEventDataType(eventType RoleEventType) interface{} {
 	}
 }
 
-func newRoleEvent(timeLineID util.TimeLineNumber, id, roleID util.ID, eventType RoleEventType, data interface{}) *RoleEvent {
+func newRoleEvent(timeLineID util.TimeLineNumber, roleID util.ID, eventType RoleEventType, data interface{}) *RoleEvent {
 	return &RoleEvent{
 		TimeLineID: timeLineID,
-		ID:         id,
+		ID:         util.NewFromUUID(uuid.NewV4()),
 		RoleID:     roleID,
 		EventType:  eventType,
 		Data:       data,
@@ -68,10 +69,9 @@ type RoleEventCircleChangesApplied struct {
 	RolesToCircle map[util.ID]util.ID
 }
 
-func NewRoleEventCircleChangesApplied(timeLineID util.TimeLineNumber, id, roleID, issuerID util.ID) *RoleEvent {
+func NewRoleEventCircleChangesApplied(timeLineID util.TimeLineNumber, roleID, issuerID util.ID) *RoleEvent {
 	return newRoleEvent(
 		timeLineID,
-		id,
 		roleID,
 		RoleEventTypeCircleChangesApplied,
 		&RoleEventCircleChangesApplied{

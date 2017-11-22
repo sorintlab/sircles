@@ -780,21 +780,21 @@ func TestTimeLines(t *testing.T) {
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5ODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5NjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509030998000000000"
+							"id": "1509030996000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5OTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031003000000000"
+							"id": "1509030999000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031008000000000"
+							"id": "1509031002000000000"
 						}
 					}
 					],
@@ -820,7 +820,7 @@ func TestTimeLines(t *testing.T) {
 			Variables: `
 			{
 				"first": 4,
-				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -828,27 +828,27 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAxMzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwNTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031013000000000"
+							"id": "1509031005000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAxODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031018000000000"
+							"id": "1509031008000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyMzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAxMTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031023000000000"
+							"id": "1509031011000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAxNDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031028000000000"
+							"id": "1509031014000000000"
 						}
 					}
 					],
@@ -874,7 +874,7 @@ func TestTimeLines(t *testing.T) {
 			Variables: `
 			{
 				"last": 4,
-				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -882,15 +882,15 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5OTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031003000000000"
+							"id": "1509030999000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5ODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5NjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509030998000000000"
+							"id": "1509030996000000000"
 						}
 					},
 					{
@@ -938,21 +938,21 @@ func TestTimeLines(t *testing.T) {
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA0ODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031048000000000"
+							"id": "1509031026000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031051000000000"
+							"id": "1509031027000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1NDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031054000000000"
+							"id": "1509031028000000000"
 						}
 					}
 					],
@@ -978,7 +978,7 @@ func TestTimeLines(t *testing.T) {
 			Variables: `
 			{
 				"first": 4,
-				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1NDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -986,27 +986,27 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1NzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyOTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031057000000000"
+							"id": "1509031029000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA2MDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAzMDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031060000000000"
+							"id": "1509031030000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA4MzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031083000000000"
+							"id": "1509031051000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA4NjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031086000000000"
+							"id": "1509031052000000000"
 						}
 					}
 					],
@@ -1032,7 +1032,7 @@ func TestTimeLines(t *testing.T) {
 			Variables: `
 			{
 				"last": 4,
-				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1NDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -1040,15 +1040,15 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031051000000000"
+							"id": "1509031027000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA0ODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031048000000000"
+							"id": "1509031026000000000"
 						}
 					},
 					{

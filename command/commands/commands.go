@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"encoding/json"
-	"fmt"
 	"time"
 
 	uuid "github.com/satori/go.uuid"
@@ -62,15 +60,6 @@ type Command struct {
 	Data          interface{}
 }
 
-type CommandRaw struct {
-	ID            util.ID
-	CommandType   CommandType
-	CorrelationID util.ID
-	CausationID   util.ID
-	IssuerID      util.ID
-	Data          json.RawMessage
-}
-
 func NewCommand(commandType CommandType, correlationID, causationID, issuerID util.ID, commandData interface{}) *Command {
 	// TODO(sgotti) detect commandType from commandData real type
 	return &Command{
@@ -80,89 +69,6 @@ func NewCommand(commandType CommandType, correlationID, causationID, issuerID ut
 		CausationID:   causationID,
 		IssuerID:      issuerID,
 		Data:          commandData,
-	}
-}
-
-func (c *Command) UnmarshalJSON(data []byte) error {
-	var cr CommandRaw
-
-	if err := json.Unmarshal(data, &cr); err != nil {
-		return err
-	}
-
-	d := GetDataType(cr.CommandType)
-	if err := json.Unmarshal(cr.Data, &d); err != nil {
-		return err
-	}
-
-	c.ID = cr.ID
-	c.CommandType = cr.CommandType
-	c.CausationID = cr.CausationID
-	c.CorrelationID = cr.CorrelationID
-	c.IssuerID = cr.IssuerID
-	c.Data = d
-
-	return nil
-}
-
-func GetDataType(commandType CommandType) interface{} {
-	switch commandType {
-	case CommandTypeSetupRootRole:
-		return &SetupRootRole{}
-	case CommandTypeUpdateRootRole:
-		return &UpdateRootRole{}
-
-	case CommandTypeCircleCreateChildRole:
-		return &CircleCreateChildRole{}
-	case CommandTypeCircleUpdateChildRole:
-		return &CircleUpdateChildRole{}
-	case CommandTypeCircleDeleteChildRole:
-		return &CircleDeleteChildRole{}
-
-	case CommandTypeSetRoleAdditionalContent:
-		return &SetRoleAdditionalContent{}
-
-	case CommandTypeCreateMember:
-		return &CreateMember{}
-	case CommandTypeUpdateMember:
-		return &UpdateMember{}
-	//case CommandTypeDeleteMember :
-	//	return &CommandDeleteMember{}
-	case CommandTypeSetMemberPassword:
-		return &SetMemberPassword{}
-	case CommandTypeSetMemberMatchUID:
-		return &SetMemberMatchUID{}
-
-	case CommandTypeCreateTension:
-		return &CreateTension{}
-	case CommandTypeUpdateTension:
-		return &UpdateTension{}
-	case CommandTypeCloseTension:
-		return &CloseTension{}
-
-	case CommandTypeCircleAddDirectMember:
-		return &CircleAddDirectMember{}
-	case CommandTypeCircleRemoveDirectMember:
-		return &CircleRemoveDirectMember{}
-
-	case CommandTypeCircleSetLeadLinkMember:
-		return &CircleSetLeadLinkMember{}
-	case CommandTypeCircleUnsetLeadLinkMember:
-		return &CircleUnsetLeadLinkMember{}
-
-	case CommandTypeCircleSetCoreRoleMember:
-		return &CircleSetCoreRoleMember{}
-	case CommandTypeCircleUnsetCoreRoleMember:
-		return &CircleUnsetCoreRoleMember{}
-
-	case CommandTypeRoleAddMember:
-		return &RoleAddMember{}
-	case CommandTypeRoleUpdateMember:
-		return &RoleUpdateMember{}
-	case CommandTypeRoleRemoveMember:
-		return &RoleRemoveMember{}
-	default:
-		panic(fmt.Errorf("unknown command type: %q", commandType))
 	}
 }
 
