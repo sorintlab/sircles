@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
@@ -18,73 +19,90 @@ var (
 	RolesTreeAggregateID = util.NewFromUUID(uuid.NewV5(SircleUUIDNamespace, string(RolesTreeAggregate)))
 )
 
-type Event struct {
+type StoredEvent struct {
 	ID             util.ID // unique global event ID
 	SequenceNumber int64   // Global event sequence
 	EventType      EventType
 	AggregateType  AggregateType
 	AggregateID    string
 	Timestamp      time.Time
-	Version        int64    // Aggregate Version. Increased for every event emitted by a specific aggregate.
-	CorrelationID  *util.ID // ID correlating this event with other events
-	CausationID    *util.ID // event ID causing this event
-	GroupID        *util.ID // event group ID
-	Data           interface{}
+	Version        int64 // Aggregate Version. Increased for every event emitted by a specific aggregate.
+	Data           []byte
+	MetaData       []byte
 }
 
-type EventRaw struct {
-	ID             util.ID // unique global event ID
-	SequenceNumber int64   // Global event sequence
-	EventType      EventType
-	AggregateType  AggregateType
-	AggregateID    string
-	Timestamp      time.Time
-	Version        int64    // Aggregate Version. Increased for every event emitted by a specific aggregate.
-	CorrelationID  *util.ID // ID correlating this event with other events
-	CausationID    *util.ID // event ID causing this event
-	GroupID        *util.ID // event group ID
-	Data           json.RawMessage
+func (e *StoredEvent) String() string {
+	return fmt.Sprintf("ID: %s, SequenceNumber: %d, EventType: %q, AggregateType: %q, AggregateID: %q, TimeStamp: %q, Version: %d", e.ID, e.SequenceNumber, e.EventType, e.AggregateType, e.AggregateID, e.Timestamp, e.Version)
 }
 
-func (e *Event) UnmarshalJSON(data []byte) (err error) {
-	var er EventRaw
+func (e *StoredEvent) Format(f fmt.State, c rune) {
+	f.Write([]byte(e.String()))
+	if c == 'v' {
+		f.Write([]byte(fmt.Sprintf(", Data: %s, MetaData: %s", e.Data, e.MetaData)))
+	}
+}
 
-	if err := json.Unmarshal(data, &er); err != nil {
-		return err
+func (e *StoredEvent) UnmarshalData() (interface{}, error) {
+	d := GetEventDataType(e.EventType)
+	if err := json.Unmarshal(e.Data, &d); err != nil {
+		return nil, errors.WithStack(err)
 	}
 
-	d := GetEventDataType(er.EventType)
-	if err := json.Unmarshal(er.Data, &d); err != nil {
-		return err
+	return d, nil
+}
+
+func (e *StoredEvent) UnmarshalMetaData() (*EventMetaData, error) {
+	md := &EventMetaData{}
+	if err := json.Unmarshal(e.MetaData, &md); err != nil {
+		return nil, errors.WithStack(err)
 	}
 
-	e.ID = er.ID
-	e.SequenceNumber = er.SequenceNumber
-	e.EventType = er.EventType
-	e.AggregateType = er.AggregateType
-	e.AggregateID = er.AggregateID
-	e.Timestamp = er.Timestamp
-	e.Version = er.Version
-	e.CorrelationID = er.CorrelationID
-	e.CausationID = er.CausationID
-	e.GroupID = er.GroupID
-	e.Data = d
-
-	return nil
+	return md, nil
 }
 
-type Events []*Event
-
-func NewEvents() Events {
-	return Events{}
+type EventMetaData struct {
+	CorrelationID *util.ID // ID correlating this event with other events
+	CausationID   *util.ID // event ID causing this event
+	GroupID       *util.ID // event group ID
 }
 
-func (es Events) AddEvent(event *Event) Events {
-	return append(es, event)
+type Event interface {
+	EventType() EventType
 }
 
-func (es Events) AddEvents(events Events) Events {
-	return append(es, events...)
+type EventData struct {
+	ID        util.ID
+	EventType EventType
+	Data      []byte
+	MetaData  []byte
+}
+
+func GenEventData(events []Event, correlationID, causationID, groupID *util.ID) ([]*EventData, error) {
+	eventsData := make([]*EventData, len(events))
+	for i, e := range events {
+		data, err := json.Marshal(e)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+
+		// augment events with common metadata
+		md := &EventMetaData{
+			CorrelationID: correlationID,
+			CausationID:   causationID,
+			GroupID:       groupID,
+		}
+		metaData, err := json.Marshal(md)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		eventsData[i] = &EventData{
+			ID:        util.NewFromUUID(uuid.NewV4()),
+			EventType: e.EventType(),
+			Data:      data,
+			MetaData:  metaData,
+		}
+	}
+	return eventsData, nil
 }
 
 type AggregateVersion struct {
@@ -241,50 +259,29 @@ func GetEventDataType(eventType EventType) interface{} {
 	}
 }
 
-func NewEvent(correlationID, causationID, groupID *util.ID, eventType EventType, aggregateType AggregateType, aggregateID string, data interface{}) *Event {
-	uuid := util.NewFromUUID(uuid.NewV4())
-	log.Debugf("generated event UUID: %s", uuid)
-	return &Event{
-		ID:            uuid,
-		CorrelationID: correlationID,
-		CausationID:   causationID,
-		GroupID:       groupID,
-		EventType:     eventType,
-		AggregateType: aggregateType,
-		AggregateID:   aggregateID,
-		Data:          data,
-	}
-}
-
 type EventCommandExecuted struct {
 	Command *commands.Command
 }
 
-func NewEventCommandExecuted(correlationID, causationID, groupID *util.ID, aggregateType AggregateType, aggregateID string, command *commands.Command) *Event {
-	return NewEvent(correlationID,
-		causationID,
-		groupID,
-		EventTypeCommandExecuted,
-		aggregateType,
-		aggregateID,
-		&EventCommandExecuted{
-			Command: command,
-		},
-	)
+func NewEventCommandExecuted(command *commands.Command) *EventCommandExecuted {
+	return &EventCommandExecuted{
+		Command: command,
+	}
+}
+
+func (e *EventCommandExecuted) EventType() EventType {
+	return EventTypeCommandExecuted
 }
 
 type EventCommandExecutionFinished struct {
 }
 
-func NewEventCommandExecutionFinished(correlationID, causationID, groupID *util.ID, aggregateType AggregateType, aggregateID string, result interface{}) *Event {
-	return NewEvent(correlationID,
-		causationID,
-		groupID,
-		EventTypeCommandExecutionFinished,
-		aggregateType,
-		aggregateID,
-		&EventCommandExecutionFinished{},
-	)
+func NewEventCommandExecutionFinished(result interface{}) *EventCommandExecutionFinished {
+	return &EventCommandExecutionFinished{}
+}
+
+func (e *EventCommandExecutionFinished) EventType() EventType {
+	return EventTypeCommandExecutionFinished
 }
 
 type EventRoleCreated struct {
@@ -295,18 +292,18 @@ type EventRoleCreated struct {
 	ParentRoleID *util.ID
 }
 
-func NewEventRoleCreated(correlationID, causationID, groupID *util.ID, role *models.Role, parentRoleID *util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleCreated,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleCreated{
-			RoleID:       role.ID,
-			RoleType:     role.RoleType,
-			Name:         role.Name,
-			Purpose:      role.Purpose,
-			ParentRoleID: parentRoleID,
-		},
-	)
+func NewEventRoleCreated(role *models.Role, parentRoleID *util.ID) *EventRoleCreated {
+	return &EventRoleCreated{
+		RoleID:       role.ID,
+		RoleType:     role.RoleType,
+		Name:         role.Name,
+		Purpose:      role.Purpose,
+		ParentRoleID: parentRoleID,
+	}
+}
+
+func (e *EventRoleCreated) EventType() EventType {
+	return EventTypeRoleCreated
 }
 
 type EventRoleUpdated struct {
@@ -316,31 +313,31 @@ type EventRoleUpdated struct {
 	Purpose  string
 }
 
-func NewEventRoleUpdated(correlationID, causationID, groupID *util.ID, role *models.Role) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleUpdated,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleUpdated{
-			RoleID:   role.ID,
-			RoleType: role.RoleType,
-			Name:     role.Name,
-			Purpose:  role.Purpose,
-		},
-	)
+func NewEventRoleUpdated(role *models.Role) *EventRoleUpdated {
+	return &EventRoleUpdated{
+		RoleID:   role.ID,
+		RoleType: role.RoleType,
+		Name:     role.Name,
+		Purpose:  role.Purpose,
+	}
+}
+
+func (e *EventRoleUpdated) EventType() EventType {
+	return EventTypeRoleUpdated
 }
 
 type EventRoleDeleted struct {
 	RoleID util.ID
 }
 
-func NewEventRoleDeleted(correlationID, causationID, groupID *util.ID, roleID util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleDeleted,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleDeleted{
-			RoleID: roleID,
-		},
-	)
+func NewEventRoleDeleted(roleID util.ID) *EventRoleDeleted {
+	return &EventRoleDeleted{
+		RoleID: roleID,
+	}
+}
+
+func (e *EventRoleDeleted) EventType() EventType {
+	return EventTypeRoleDeleted
 }
 
 type EventRoleChangedParent struct {
@@ -348,15 +345,15 @@ type EventRoleChangedParent struct {
 	ParentRoleID *util.ID
 }
 
-func NewEventRoleChangedParent(correlationID, causationID, groupID *util.ID, roleID util.ID, parentRoleID *util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleChangedParent,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleChangedParent{
-			RoleID:       roleID,
-			ParentRoleID: parentRoleID,
-		},
-	)
+func NewEventRoleChangedParent(roleID util.ID, parentRoleID *util.ID) *EventRoleChangedParent {
+	return &EventRoleChangedParent{
+		RoleID:       roleID,
+		ParentRoleID: parentRoleID,
+	}
+}
+
+func (e *EventRoleChangedParent) EventType() EventType {
+	return EventTypeRoleChangedParent
 }
 
 type EventRoleDomainCreated struct {
@@ -365,16 +362,16 @@ type EventRoleDomainCreated struct {
 	Description string
 }
 
-func NewEventRoleDomainCreated(correlationID, causationID, groupID *util.ID, roleID util.ID, domain *models.Domain) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleDomainCreated,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleDomainCreated{
-			DomainID:    domain.ID,
-			RoleID:      roleID,
-			Description: domain.Description,
-		},
-	)
+func NewEventRoleDomainCreated(roleID util.ID, domain *models.Domain) *EventRoleDomainCreated {
+	return &EventRoleDomainCreated{
+		DomainID:    domain.ID,
+		RoleID:      roleID,
+		Description: domain.Description,
+	}
+}
+
+func (e *EventRoleDomainCreated) EventType() EventType {
+	return EventTypeRoleDomainCreated
 }
 
 type EventRoleDomainUpdated struct {
@@ -383,16 +380,16 @@ type EventRoleDomainUpdated struct {
 	Description string
 }
 
-func NewEventRoleDomainUpdated(correlationID, causationID, groupID *util.ID, roleID util.ID, domain *models.Domain) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleDomainUpdated,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleDomainUpdated{
-			DomainID:    domain.ID,
-			RoleID:      roleID,
-			Description: domain.Description,
-		},
-	)
+func NewEventRoleDomainUpdated(roleID util.ID, domain *models.Domain) *EventRoleDomainUpdated {
+	return &EventRoleDomainUpdated{
+		DomainID:    domain.ID,
+		RoleID:      roleID,
+		Description: domain.Description,
+	}
+}
+
+func (e *EventRoleDomainUpdated) EventType() EventType {
+	return EventTypeRoleDomainUpdated
 }
 
 type EventRoleDomainDeleted struct {
@@ -400,15 +397,15 @@ type EventRoleDomainDeleted struct {
 	RoleID   util.ID
 }
 
-func NewEventRoleDomainDeleted(correlationID, causationID, groupID *util.ID, roleID, domainID util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleDomainDeleted,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleDomainDeleted{
-			DomainID: domainID,
-			RoleID:   roleID,
-		},
-	)
+func NewEventRoleDomainDeleted(roleID, domainID util.ID) *EventRoleDomainDeleted {
+	return &EventRoleDomainDeleted{
+		DomainID: domainID,
+		RoleID:   roleID,
+	}
+}
+
+func (e *EventRoleDomainDeleted) EventType() EventType {
+	return EventTypeRoleDomainDeleted
 }
 
 type EventRoleAccountabilityCreated struct {
@@ -417,16 +414,16 @@ type EventRoleAccountabilityCreated struct {
 	Description      string
 }
 
-func NewEventRoleAccountabilityCreated(correlationID, causationID, groupID *util.ID, roleID util.ID, accountability *models.Accountability) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleAccountabilityCreated,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleAccountabilityCreated{
-			AccountabilityID: accountability.ID,
-			RoleID:           roleID,
-			Description:      accountability.Description,
-		},
-	)
+func NewEventRoleAccountabilityCreated(roleID util.ID, accountability *models.Accountability) *EventRoleAccountabilityCreated {
+	return &EventRoleAccountabilityCreated{
+		AccountabilityID: accountability.ID,
+		RoleID:           roleID,
+		Description:      accountability.Description,
+	}
+}
+
+func (e *EventRoleAccountabilityCreated) EventType() EventType {
+	return EventTypeRoleAccountabilityCreated
 }
 
 type EventRoleAccountabilityUpdated struct {
@@ -435,16 +432,16 @@ type EventRoleAccountabilityUpdated struct {
 	Description      string
 }
 
-func NewEventRoleAccountabilityUpdated(correlationID, causationID, groupID *util.ID, roleID util.ID, accountability *models.Accountability) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleAccountabilityUpdated,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleAccountabilityUpdated{
-			AccountabilityID: accountability.ID,
-			RoleID:           roleID,
-			Description:      accountability.Description,
-		},
-	)
+func NewEventRoleAccountabilityUpdated(roleID util.ID, accountability *models.Accountability) *EventRoleAccountabilityUpdated {
+	return &EventRoleAccountabilityUpdated{
+		AccountabilityID: accountability.ID,
+		RoleID:           roleID,
+		Description:      accountability.Description,
+	}
+}
+
+func (e *EventRoleAccountabilityUpdated) EventType() EventType {
+	return EventTypeRoleAccountabilityUpdated
 }
 
 type EventRoleAccountabilityDeleted struct {
@@ -452,15 +449,15 @@ type EventRoleAccountabilityDeleted struct {
 	RoleID           util.ID
 }
 
-func NewEventRoleAccountabilityDeleted(correlationID, causationID, groupID *util.ID, roleID, accountability util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleAccountabilityDeleted,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleAccountabilityDeleted{
-			AccountabilityID: accountability,
-			RoleID:           roleID,
-		},
-	)
+func NewEventRoleAccountabilityDeleted(roleID, accountability util.ID) *EventRoleAccountabilityDeleted {
+	return &EventRoleAccountabilityDeleted{
+		AccountabilityID: accountability,
+		RoleID:           roleID,
+	}
+}
+
+func (e *EventRoleAccountabilityDeleted) EventType() EventType {
+	return EventTypeRoleAccountabilityDeleted
 }
 
 type EventRoleAdditionalContentSet struct {
@@ -468,15 +465,15 @@ type EventRoleAdditionalContentSet struct {
 	Content string
 }
 
-func NewEventRoleAdditionalContentSet(correlationID, causationID, groupID *util.ID, roleID util.ID, roleAdditionalContent *models.RoleAdditionalContent) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleAdditionalContentSet,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleAdditionalContentSet{
-			RoleID:  roleID,
-			Content: roleAdditionalContent.Content,
-		},
-	)
+func NewEventRoleAdditionalContentSet(roleID util.ID, roleAdditionalContent *models.RoleAdditionalContent) *EventRoleAdditionalContentSet {
+	return &EventRoleAdditionalContentSet{
+		RoleID:  roleID,
+		Content: roleAdditionalContent.Content,
+	}
+}
+
+func (e *EventRoleAdditionalContentSet) EventType() EventType {
+	return EventTypeRoleAdditionalContentSet
 }
 
 type EventRoleMemberAdded struct {
@@ -486,17 +483,17 @@ type EventRoleMemberAdded struct {
 	NoCoreMember bool
 }
 
-func NewEventRoleMemberAdded(correlationID, causationID, groupID *util.ID, roleID, memberID util.ID, focus *string, noCoreMember bool) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleMemberAdded,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleMemberAdded{
-			RoleID:       roleID,
-			MemberID:     memberID,
-			Focus:        focus,
-			NoCoreMember: noCoreMember,
-		},
-	)
+func NewEventRoleMemberAdded(roleID, memberID util.ID, focus *string, noCoreMember bool) *EventRoleMemberAdded {
+	return &EventRoleMemberAdded{
+		RoleID:       roleID,
+		MemberID:     memberID,
+		Focus:        focus,
+		NoCoreMember: noCoreMember,
+	}
+}
+
+func (e *EventRoleMemberAdded) EventType() EventType {
+	return EventTypeRoleMemberAdded
 }
 
 type EventRoleMemberUpdated struct {
@@ -506,17 +503,17 @@ type EventRoleMemberUpdated struct {
 	NoCoreMember bool
 }
 
-func NewEventRoleMemberUpdated(correlationID, causationID, groupID *util.ID, roleID, memberID util.ID, focus *string, noCoreMember bool) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleMemberUpdated,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleMemberUpdated{
-			RoleID:       roleID,
-			MemberID:     memberID,
-			Focus:        focus,
-			NoCoreMember: noCoreMember,
-		},
-	)
+func NewEventRoleMemberUpdated(roleID, memberID util.ID, focus *string, noCoreMember bool) *EventRoleMemberUpdated {
+	return &EventRoleMemberUpdated{
+		RoleID:       roleID,
+		MemberID:     memberID,
+		Focus:        focus,
+		NoCoreMember: noCoreMember,
+	}
+}
+
+func (e *EventRoleMemberUpdated) EventType() EventType {
+	return EventTypeRoleMemberUpdated
 }
 
 type EventRoleMemberRemoved struct {
@@ -524,15 +521,15 @@ type EventRoleMemberRemoved struct {
 	MemberID util.ID
 }
 
-func NewEventRoleMemberRemoved(correlationID, causationID, groupID *util.ID, roleID, memberID util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeRoleMemberRemoved,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventRoleMemberRemoved{
-			RoleID:   roleID,
-			MemberID: memberID,
-		},
-	)
+func NewEventRoleMemberRemoved(roleID, memberID util.ID) *EventRoleMemberRemoved {
+	return &EventRoleMemberRemoved{
+		RoleID:   roleID,
+		MemberID: memberID,
+	}
+}
+
+func (e *EventRoleMemberRemoved) EventType() EventType {
+	return EventTypeRoleMemberRemoved
 }
 
 type EventCircleDirectMemberAdded struct {
@@ -540,15 +537,15 @@ type EventCircleDirectMemberAdded struct {
 	MemberID util.ID
 }
 
-func NewEventCircleDirectMemberAdded(correlationID, causationID, groupID *util.ID, roleID, memberID util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeCircleDirectMemberAdded,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventCircleDirectMemberAdded{
-			RoleID:   roleID,
-			MemberID: memberID,
-		},
-	)
+func NewEventCircleDirectMemberAdded(roleID, memberID util.ID) *EventCircleDirectMemberAdded {
+	return &EventCircleDirectMemberAdded{
+		RoleID:   roleID,
+		MemberID: memberID,
+	}
+}
+
+func (e *EventCircleDirectMemberAdded) EventType() EventType {
+	return EventTypeCircleDirectMemberAdded
 }
 
 type EventCircleDirectMemberRemoved struct {
@@ -556,15 +553,15 @@ type EventCircleDirectMemberRemoved struct {
 	MemberID util.ID
 }
 
-func NewEventCircleDirectMemberRemoved(correlationID, causationID, groupID *util.ID, roleID, memberID util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeCircleDirectMemberRemoved,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventCircleDirectMemberRemoved{
-			RoleID:   roleID,
-			MemberID: memberID,
-		},
-	)
+func NewEventCircleDirectMemberRemoved(roleID, memberID util.ID) *EventCircleDirectMemberRemoved {
+	return &EventCircleDirectMemberRemoved{
+		RoleID:   roleID,
+		MemberID: memberID,
+	}
+}
+
+func (e *EventCircleDirectMemberRemoved) EventType() EventType {
+	return EventTypeCircleDirectMemberRemoved
 }
 
 type EventCircleLeadLinkMemberSet struct {
@@ -576,16 +573,16 @@ type EventCircleLeadLinkMemberSet struct {
 	LeadLinkRoleID util.ID
 }
 
-func NewEventCircleLeadLinkMemberSet(correlationID, causationID, groupID *util.ID, roleID, leadLinkRoleID, memberID util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeCircleLeadLinkMemberSet,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventCircleLeadLinkMemberSet{
-			RoleID:         roleID,
-			LeadLinkRoleID: leadLinkRoleID,
-			MemberID:       memberID,
-		},
-	)
+func NewEventCircleLeadLinkMemberSet(roleID, leadLinkRoleID, memberID util.ID) *EventCircleLeadLinkMemberSet {
+	return &EventCircleLeadLinkMemberSet{
+		RoleID:         roleID,
+		LeadLinkRoleID: leadLinkRoleID,
+		MemberID:       memberID,
+	}
+}
+
+func (e *EventCircleLeadLinkMemberSet) EventType() EventType {
+	return EventTypeCircleLeadLinkMemberSet
 }
 
 type EventCircleLeadLinkMemberUnset struct {
@@ -597,16 +594,16 @@ type EventCircleLeadLinkMemberUnset struct {
 	MemberID       util.ID
 }
 
-func NewEventCircleLeadLinkMemberUnset(correlationID, causationID, groupID *util.ID, roleID, leadLinkRoleID, memberID util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeCircleLeadLinkMemberUnset,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventCircleLeadLinkMemberUnset{
-			RoleID:         roleID,
-			LeadLinkRoleID: leadLinkRoleID,
-			MemberID:       memberID,
-		},
-	)
+func NewEventCircleLeadLinkMemberUnset(roleID, leadLinkRoleID, memberID util.ID) *EventCircleLeadLinkMemberUnset {
+	return &EventCircleLeadLinkMemberUnset{
+		RoleID:         roleID,
+		LeadLinkRoleID: leadLinkRoleID,
+		MemberID:       memberID,
+	}
+}
+
+func (e *EventCircleLeadLinkMemberUnset) EventType() EventType {
+	return EventTypeCircleLeadLinkMemberUnset
 }
 
 type EventCircleCoreRoleMemberSet struct {
@@ -620,18 +617,18 @@ type EventCircleCoreRoleMemberSet struct {
 	CoreRoleID util.ID
 }
 
-func NewEventCircleCoreRoleMemberSet(correlationID, causationID, groupID *util.ID, roleID, coreRoleID, memberID util.ID, roleType models.RoleType, electionExpiration *time.Time) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeCircleCoreRoleMemberSet,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventCircleCoreRoleMemberSet{
-			RoleID:             roleID,
-			RoleType:           roleType,
-			MemberID:           memberID,
-			ElectionExpiration: electionExpiration,
-			CoreRoleID:         coreRoleID,
-		},
-	)
+func NewEventCircleCoreRoleMemberSet(roleID, coreRoleID, memberID util.ID, roleType models.RoleType, electionExpiration *time.Time) *EventCircleCoreRoleMemberSet {
+	return &EventCircleCoreRoleMemberSet{
+		RoleID:             roleID,
+		RoleType:           roleType,
+		MemberID:           memberID,
+		ElectionExpiration: electionExpiration,
+		CoreRoleID:         coreRoleID,
+	}
+}
+
+func (e *EventCircleCoreRoleMemberSet) EventType() EventType {
+	return EventTypeCircleCoreRoleMemberSet
 }
 
 type EventCircleCoreRoleMemberUnset struct {
@@ -644,17 +641,17 @@ type EventCircleCoreRoleMemberUnset struct {
 	MemberID   util.ID
 }
 
-func NewEventCircleCoreRoleMemberUnset(correlationID, causationID, groupID *util.ID, roleID, coreRoleID, memberID util.ID, roleType models.RoleType) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeCircleCoreRoleMemberUnset,
-		RolesTreeAggregate,
-		RolesTreeAggregateID.String(),
-		&EventCircleCoreRoleMemberUnset{
-			RoleID:     roleID,
-			RoleType:   roleType,
-			CoreRoleID: coreRoleID,
-			MemberID:   memberID,
-		},
-	)
+func NewEventCircleCoreRoleMemberUnset(roleID, coreRoleID, memberID util.ID, roleType models.RoleType) *EventCircleCoreRoleMemberUnset {
+	return &EventCircleCoreRoleMemberUnset{
+		RoleID:     roleID,
+		RoleType:   roleType,
+		CoreRoleID: coreRoleID,
+		MemberID:   memberID,
+	}
+}
+
+func (e *EventCircleCoreRoleMemberUnset) EventType() EventType {
+	return EventTypeCircleCoreRoleMemberUnset
 }
 
 type EventTensionCreated struct {
@@ -664,17 +661,17 @@ type EventTensionCreated struct {
 	RoleID      *util.ID
 }
 
-func NewEventTensionCreated(correlationID, causationID, groupID *util.ID, tension *models.Tension, memberID util.ID, roleID *util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeTensionCreated,
-		TensionAggregate,
-		tension.ID.String(),
-		&EventTensionCreated{
-			Title:       tension.Title,
-			Description: tension.Description,
-			MemberID:    memberID,
-			RoleID:      roleID,
-		},
-	)
+func NewEventTensionCreated(tension *models.Tension, memberID util.ID, roleID *util.ID) *EventTensionCreated {
+	return &EventTensionCreated{
+		Title:       tension.Title,
+		Description: tension.Description,
+		MemberID:    memberID,
+		RoleID:      roleID,
+	}
+}
+
+func (e *EventTensionCreated) EventType() EventType {
+	return EventTypeTensionCreated
 }
 
 type EventTensionUpdated struct {
@@ -682,15 +679,15 @@ type EventTensionUpdated struct {
 	Description string
 }
 
-func NewEventTensionUpdated(correlationID, causationID, groupID *util.ID, tension *models.Tension) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeTensionUpdated,
-		TensionAggregate,
-		tension.ID.String(),
-		&EventTensionUpdated{
-			Title:       tension.Title,
-			Description: tension.Description,
-		},
-	)
+func NewEventTensionUpdated(tension *models.Tension) *EventTensionUpdated {
+	return &EventTensionUpdated{
+		Title:       tension.Title,
+		Description: tension.Description,
+	}
+}
+
+func (e *EventTensionUpdated) EventType() EventType {
+	return EventTypeTensionUpdated
 }
 
 type EventTensionRoleChanged struct {
@@ -698,29 +695,29 @@ type EventTensionRoleChanged struct {
 	RoleID     *util.ID
 }
 
-func NewEventTensionRoleChanged(correlationID, causationID, groupID *util.ID, tensionID util.ID, prevRoleID, roleID *util.ID) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeTensionRoleChanged,
-		TensionAggregate,
-		tensionID.String(),
-		&EventTensionRoleChanged{
-			PrevRoleID: prevRoleID,
-			RoleID:     roleID,
-		},
-	)
+func NewEventTensionRoleChanged(tensionID util.ID, prevRoleID, roleID *util.ID) *EventTensionRoleChanged {
+	return &EventTensionRoleChanged{
+		PrevRoleID: prevRoleID,
+		RoleID:     roleID,
+	}
+}
+
+func (e *EventTensionRoleChanged) EventType() EventType {
+	return EventTypeTensionRoleChanged
 }
 
 type EventTensionClosed struct {
 	Reason string
 }
 
-func NewEventTensionClosed(correlationID, causationID, groupID *util.ID, tensionID util.ID, reason string) *Event {
-	return NewEvent(correlationID, causationID, groupID, EventTypeTensionClosed,
-		TensionAggregate,
-		tensionID.String(),
-		&EventTensionClosed{
-			Reason: reason,
-		},
-	)
+func NewEventTensionClosed(tensionID util.ID, reason string) *EventTensionClosed {
+	return &EventTensionClosed{
+		Reason: reason,
+	}
+}
+
+func (e *EventTensionClosed) EventType() EventType {
+	return EventTypeTensionClosed
 }
 
 type EventMemberCreated struct {
@@ -730,19 +727,17 @@ type EventMemberCreated struct {
 	Email    string
 }
 
-func NewEventMemberCreated(correlationID, causationID, groupID *util.ID, member *models.Member) *Event {
-	return NewEvent(correlationID, causationID,
-		groupID,
-		EventTypeMemberCreated,
-		MemberAggregate,
-		member.ID.String(),
-		&EventMemberCreated{
-			IsAdmin:  member.IsAdmin,
-			UserName: member.UserName,
-			FullName: member.FullName,
-			Email:    member.Email,
-		},
-	)
+func NewEventMemberCreated(member *models.Member) *EventMemberCreated {
+	return &EventMemberCreated{
+		IsAdmin:  member.IsAdmin,
+		UserName: member.UserName,
+		FullName: member.FullName,
+		Email:    member.Email,
+	}
+}
+
+func (e *EventMemberCreated) EventType() EventType {
+	return EventTypeMemberCreated
 }
 
 type EventMemberUpdated struct {
@@ -752,65 +747,57 @@ type EventMemberUpdated struct {
 	Email    string
 }
 
-func NewEventMemberUpdated(correlationID, causationID, groupID *util.ID, member *models.Member) *Event {
-	return NewEvent(correlationID, causationID,
-		groupID,
-		EventTypeMemberUpdated,
-		MemberAggregate,
-		member.ID.String(),
-		&EventMemberUpdated{
-			IsAdmin:  member.IsAdmin,
-			UserName: member.UserName,
-			FullName: member.FullName,
-			Email:    member.Email,
-		},
-	)
+func NewEventMemberUpdated(member *models.Member) *EventMemberUpdated {
+	return &EventMemberUpdated{
+		IsAdmin:  member.IsAdmin,
+		UserName: member.UserName,
+		FullName: member.FullName,
+		Email:    member.Email,
+	}
+}
+
+func (e *EventMemberUpdated) EventType() EventType {
+	return EventTypeMemberUpdated
 }
 
 type EventMemberPasswordSet struct {
 	PasswordHash string
 }
 
-func NewEventMemberPasswordSet(correlationID, causationID, groupID *util.ID, memberID util.ID, passwordHash string) *Event {
-	return NewEvent(correlationID, causationID,
-		groupID,
-		EventTypeMemberPasswordSet,
-		MemberAggregate,
-		memberID.String(),
-		&EventMemberPasswordSet{
-			PasswordHash: passwordHash,
-		},
-	)
+func NewEventMemberPasswordSet(memberID util.ID, passwordHash string) *EventMemberPasswordSet {
+	return &EventMemberPasswordSet{
+		PasswordHash: passwordHash,
+	}
+}
+
+func (e *EventMemberPasswordSet) EventType() EventType {
+	return EventTypeMemberPasswordSet
 }
 
 type EventMemberAvatarSet struct {
 	Image []byte
 }
 
-func NewEventMemberAvatarSet(correlationID, causationID, groupID *util.ID, memberID util.ID, image []byte) *Event {
-	return NewEvent(correlationID, causationID,
-		groupID,
-		EventTypeMemberAvatarSet,
-		MemberAggregate,
-		memberID.String(),
-		&EventMemberAvatarSet{
-			Image: image,
-		},
-	)
+func NewEventMemberAvatarSet(memberID util.ID, image []byte) *EventMemberAvatarSet {
+	return &EventMemberAvatarSet{
+		Image: image,
+	}
+}
+
+func (e *EventMemberAvatarSet) EventType() EventType {
+	return EventTypeMemberAvatarSet
 }
 
 type EventMemberMatchUIDSet struct {
 	MatchUID string
 }
 
-func NewEventMemberMatchUIDSet(correlationID, causationID, groupID *util.ID, memberID util.ID, matchUID string) *Event {
-	return NewEvent(correlationID, causationID,
-		groupID,
-		EventTypeMemberMatchUIDSet,
-		MemberAggregate,
-		memberID.String(),
-		&EventMemberMatchUIDSet{
-			MatchUID: matchUID,
-		},
-	)
+func NewEventMemberMatchUIDSet(memberID util.ID, matchUID string) *EventMemberMatchUIDSet {
+	return &EventMemberMatchUIDSet{
+		MatchUID: matchUID,
+	}
+}
+
+func (e *EventMemberMatchUIDSet) EventType() EventType {
+	return EventTypeMemberMatchUIDSet
 }

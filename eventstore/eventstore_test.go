@@ -10,78 +10,16 @@ import (
 	"github.com/sorintlab/sircles/db"
 )
 
-func TestWriteEventsDifferentAggregateID(t *testing.T) {
-	events := Events{
-		&Event{
-			AggregateID:   "65c4dce5-2935-46eb-a71e-3ea1cb4b970c",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeCommandExecuted,
-		},
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleCreated,
-		},
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleMemberAdded,
-		},
-	}
-
-	tmpDir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatalf("ioutil.TempDir(%q, %q) got error %q", "", "", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	dbpath := filepath.Join(tmpDir, "db")
-
-	db, err := db.NewDB("sqlite3", dbpath)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	tx, err := db.NewTx()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	es := NewEventStore(tx)
-
-	expectedErr := "events have different aggregate id"
-	if err := es.WriteEvents(events, 0); err != nil {
-		if err.Error() != expectedErr {
-			t.Fatalf("expected error: %v, got: %v", expectedErr, err)
-		}
-	} else {
-		t.Fatalf("expected error: %v, got no error", expectedErr)
-
-	}
-
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestWriteEvents(t *testing.T) {
-	events := Events{
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeCommandExecuted,
+	events := []*EventData{
+		&EventData{
+			EventType: EventTypeCommandExecuted,
 		},
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleCreated,
+		&EventData{
+			EventType: EventTypeRoleCreated,
 		},
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleMemberAdded,
+		&EventData{
+			EventType: EventTypeRoleMemberAdded,
 		},
 	}
 
@@ -116,7 +54,7 @@ func TestWriteEvents(t *testing.T) {
 	}
 	es := NewEventStore(tx)
 
-	if err := es.WriteEvents(events, 0); err != nil {
+	if _, err := es.WriteEvents(events, RolesTreeAggregate, RolesTreeAggregateID.String(), 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -131,7 +69,7 @@ func TestWriteEvents(t *testing.T) {
 		t.Fatalf("expected event sequence %d, got %d", expectedSeq, seq)
 	}
 
-	if err := es.WriteEvents(events, 3); err != nil {
+	if _, err := es.WriteEvents(events, RolesTreeAggregate, RolesTreeAggregateID.String(), 3); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -154,7 +92,7 @@ func TestWriteEvents(t *testing.T) {
 
 	// Write events with different version than the current one
 	expectedErr := fmt.Errorf("current version %d different than provided version %d", 6, 5)
-	if err := es.WriteEvents(events, 5); err == nil {
+	if _, err := es.WriteEvents(events, RolesTreeAggregate, RolesTreeAggregateID.String(), 5); err == nil {
 		t.Fatalf("expected error %q, got no error", expectedErr)
 	} else {
 		if err.Error() != expectedErr.Error() {
@@ -169,39 +107,27 @@ func TestWriteEvents(t *testing.T) {
 
 func TestRestoreEvents(t *testing.T) {
 
-	events1 := Events{
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeCommandExecuted,
+	events1 := []*EventData{
+		&EventData{
+			EventType: EventTypeCommandExecuted,
 		},
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleCreated,
+		&EventData{
+			EventType: EventTypeRoleCreated,
 		},
-		&Event{
-			AggregateID:   "b1399c23-5b50-4c72-b803-804efaba0cb1",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleMemberAdded,
+		&EventData{
+			EventType: EventTypeRoleMemberAdded,
 		},
 	}
 
-	events2 := Events{
-		&Event{
-			AggregateID:   "65c4dce5-2935-46eb-a71e-3ea1cb4b970c",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeCommandExecuted,
+	events2 := []*EventData{
+		&EventData{
+			EventType: EventTypeCommandExecuted,
 		},
-		&Event{
-			AggregateID:   "65c4dce5-2935-46eb-a71e-3ea1cb4b970c",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleCreated,
+		&EventData{
+			EventType: EventTypeRoleCreated,
 		},
-		&Event{
-			AggregateID:   "65c4dce5-2935-46eb-a71e-3ea1cb4b970c",
-			AggregateType: RolesTreeAggregate,
-			EventType:     EventTypeRoleMemberAdded,
+		&EventData{
+			EventType: EventTypeRoleMemberAdded,
 		},
 	}
 
@@ -236,10 +162,10 @@ func TestRestoreEvents(t *testing.T) {
 	}
 	es := NewEventStore(tx)
 
-	if err := es.WriteEvents(events1, 0); err != nil {
+	if _, err := es.WriteEvents(events1, RolesTreeAggregate, "b1399c23-5b50-4c72-b803-804efaba0cb1", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if err := es.WriteEvents(events2, 0); err != nil {
+	if _, err := es.WriteEvents(events2, RolesTreeAggregate, "65c4dce5-2935-46eb-a71e-3ea1cb4b970c", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

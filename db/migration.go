@@ -99,9 +99,9 @@ var migrations = []migration{
 		stmts: []string{
 			// === EventStore ===
 			`--POSTGRES
-             create table event (id uuid not null, sequencenumber bigserial, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint not null, correlationid uuid, causationid uuid, groupid uuid, data bytea, PRIMARY KEY (sequencenumber), UNIQUE (aggregatetype, aggregateid, version))`,
+             create table event (id uuid not null, sequencenumber bigserial, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint not null, data bytea, metadata bytea, PRIMARY KEY (sequencenumber), UNIQUE (aggregatetype, aggregateid, version))`,
 			`--SQLITE3
-             create table event (id uuid not null, sequencenumber INTEGER PRIMARY KEY AUTOINCREMENT, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint not null, correlationid uuid, causationid uuid, groupid uuid, data bytea, UNIQUE (aggregatetype, aggregateid, version))`,
+             create table event (id uuid not null, sequencenumber INTEGER PRIMARY KEY AUTOINCREMENT, eventtype varchar not null, aggregatetype varchar not null, aggregateid varchar not null, timestamp timestamptz not null, version bigint not null, data bytea, metadata bytea, UNIQUE (aggregatetype, aggregateid, version))`,
 			"create index event_aggregateid_version on event(aggregateid, version)",
 			"create index event_aggregatetype on event(aggregatetype)",
 

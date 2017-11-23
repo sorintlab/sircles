@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	uuid "github.com/satori/go.uuid"
 	"github.com/sorintlab/sircles/change"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
@@ -53,27 +54,30 @@ const (
 )
 
 type Command struct {
+	ID            util.ID
 	CommandType   CommandType
-	CausationID   util.ID
 	CorrelationID util.ID
+	CausationID   util.ID
 	IssuerID      util.ID
 	Data          interface{}
 }
 
 type CommandRaw struct {
+	ID            util.ID
 	CommandType   CommandType
-	CausationID   util.ID
 	CorrelationID util.ID
+	CausationID   util.ID
 	IssuerID      util.ID
 	Data          json.RawMessage
 }
 
-func NewCommand(commandType CommandType, causationID, correlationID, issuerID util.ID, commandData interface{}) *Command {
+func NewCommand(commandType CommandType, correlationID, causationID, issuerID util.ID, commandData interface{}) *Command {
 	// TODO(sgotti) detect commandType from commandData real type
 	return &Command{
+		ID:            util.NewFromUUID(uuid.NewV4()),
 		CommandType:   commandType,
-		CausationID:   causationID,
 		CorrelationID: correlationID,
+		CausationID:   causationID,
 		IssuerID:      issuerID,
 		Data:          commandData,
 	}
@@ -91,6 +95,7 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	c.ID = cr.ID
 	c.CommandType = cr.CommandType
 	c.CausationID = cr.CausationID
 	c.CorrelationID = cr.CorrelationID

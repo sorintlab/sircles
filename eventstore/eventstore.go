@@ -2,7 +2,6 @@ package eventstore
 
 import (
 	"database/sql"
-	"encoding/json"
 
 	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
@@ -23,8 +22,8 @@ var (
 	// Use postgresql $ placeholder. It'll be converted to ? from the provided db functions
 	sb = sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 
-	eventSelect            = sb.Select("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "groupid", "data").From("event")
-	eventInsert            = sb.Insert("event").Columns("id", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "correlationid", "causationid", "groupid", "data")
+	eventSelect            = sb.Select("id", "sequencenumber", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "data", "metadata").From("event")
+	eventInsert            = sb.Insert("event").Columns("id", "eventtype", "aggregatetype", "aggregateid", "timestamp", "version", "data", "metadata")
 	aggregateVersionSelect = sb.Select("aggregatetype", "aggregateid", "version").From("aggregateversion")
 	aggregateVersionInsert = sb.Insert("aggregateversion").Columns("aggregatetype", "aggregateid", "version")
 )
@@ -45,28 +44,24 @@ func (s *EventStore) SetTimeGenerator(tg common.TimeGenerator) {
 	s.tg = tg
 }
 
-func scanEvent(rows *sql.Rows) (*Event, error) {
-	e := Event{}
-	var rawData []byte
+func scanEvent(rows *sql.Rows) (*StoredEvent, error) {
+	e := StoredEvent{}
+	var data, metaData []byte
 	// To make sqlite3 happy
 	var eventType, aggregateType string
-	fields := []interface{}{&e.ID, &e.SequenceNumber, &eventType, &aggregateType, &e.AggregateID, &e.Timestamp, &e.Version, &e.CorrelationID, &e.CausationID, &e.GroupID, &rawData}
+	fields := []interface{}{&e.ID, &e.SequenceNumber, &eventType, &aggregateType, &e.AggregateID, &e.Timestamp, &e.Version, &data, &metaData}
 	if err := rows.Scan(fields...); err != nil {
 		return nil, errors.Wrap(err, "error scanning event")
 	}
 	e.EventType = EventType(eventType)
 	e.AggregateType = AggregateType(aggregateType)
-
-	data := GetEventDataType(e.EventType)
-	if err := json.Unmarshal(rawData, &data); err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal event")
-	}
 	e.Data = data
+	e.MetaData = metaData
 	return &e, nil
 }
 
-func scanEvents(rows *sql.Rows) ([]*Event, error) {
-	events := []*Event{}
+func scanEvents(rows *sql.Rows) ([]*StoredEvent, error) {
+	events := []*StoredEvent{}
 	for rows.Next() {
 		m, err := scanEvent(rows)
 		if err != nil {
@@ -108,16 +103,8 @@ func scanAggregatesVersion(rows *sql.Rows) ([]*AggregateVersion, error) {
 	return aggregatesVersion, nil
 }
 
-func (s *EventStore) insertEvent(tx *db.Tx, event *Event) error {
-	data, err := json.Marshal(event.Data)
-	if err != nil {
-		return errors.Wrap(err, "failed to marshal event")
-	}
-	return s.insertEventMarshalled(tx, event, data)
-}
-
-func (s *EventStore) insertEventMarshalled(tx *db.Tx, event *Event, data []byte) error {
-	q, args, err := eventInsert.Values(event.ID, event.EventType, event.AggregateType, event.AggregateID, event.Timestamp, event.Version, event.CorrelationID, event.CausationID, event.GroupID, data).ToSql()
+func (s *EventStore) insertEvent(tx *db.Tx, event *StoredEvent) error {
+	q, args, err := eventInsert.Values(event.ID, event.EventType, event.AggregateType, event.AggregateID, event.Timestamp, event.Version, event.Data, event.MetaData).ToSql()
 	if err != nil {
 		return errors.Wrap(err, "failed to build query")
 	}
@@ -162,7 +149,7 @@ func (s *EventStore) LastSequenceNumber() (int64, error) {
 		return 0, errors.Wrap(err, "failed to build query")
 	}
 
-	var es Events
+	var es []*StoredEvent
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
@@ -181,28 +168,15 @@ func (s *EventStore) LastSequenceNumber() (int64, error) {
 	return int64(0), nil
 }
 
-func (s *EventStore) WriteEvents(events Events, version int64) error {
-	if len(events) == 0 {
-		return nil
-	}
-
-	// get the aggregates versions
-	aggregateID := events[0].AggregateID
-	aggregateType := events[0].AggregateType
-
-	for _, e := range events {
-		if e.AggregateID != aggregateID {
-			return errors.Errorf("events have different aggregate id")
-		}
-		if e.AggregateType != aggregateType {
-			return errors.Errorf("events have different aggregate types")
-		}
+func (s *EventStore) WriteEvents(eventsData []*EventData, aggregateType AggregateType, aggregateID string, version int64) ([]*StoredEvent, error) {
+	if len(eventsData) == 0 {
+		return nil, nil
 	}
 
 	sb := sb.Select("aggregatetype", "version").From("aggregateversion").Where(sq.Eq{"aggregateid": aggregateID})
 	q, args, err := sb.ToSql()
 	if err != nil {
-		return errors.Wrap(err, "failed to build query")
+		return nil, errors.Wrap(err, "failed to build query")
 	}
 
 	var curVersion int64
@@ -220,30 +194,34 @@ func (s *EventStore) WriteEvents(events Events, version int64) error {
 	// aggregate, this is catched by unique constraints on (aggregateType,
 	// aggregateID, version).
 	if curVersion != version {
-		return errors.Errorf("current version %d different than provided version %d", curVersion, version)
+		return nil, errors.Errorf("current version %d different than provided version %d", curVersion, version)
 	}
 
 	if version != 0 && aggregateType != AggregateType(at) {
-		return errors.Errorf("aggregate in version has different type")
+		return nil, errors.Errorf("aggregate in version has different type")
 	}
 
 	prevVersion := version
 
 	// write the events
 
-	// marshal before to shorten lock time
-	mData := make([][]byte, len(events))
-	for i, e := range events {
-		data, err := json.Marshal(e.Data)
-		if err != nil {
-			return errors.Wrap(err, "failed to marshal event")
-		}
-		mData[i] = data
+	events := make([]*StoredEvent, len(eventsData))
 
+	for i, ed := range eventsData {
 		version++
 
-		e.Timestamp = s.tg.Now()
-		e.Version = version
+		e := &StoredEvent{
+			ID:            ed.ID,
+			EventType:     ed.EventType,
+			AggregateType: aggregateType,
+			AggregateID:   aggregateID,
+			Data:          ed.Data,
+			MetaData:      ed.MetaData,
+
+			Timestamp: s.tg.Now(),
+			Version:   version,
+		}
+		events[i] = e
 	}
 
 	// take exlusive lock.
@@ -255,27 +233,27 @@ func (s *EventStore) WriteEvents(events Events, version int64) error {
 		return err
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to take exlusive lock")
+		return nil, errors.Wrap(err, "failed to take exlusive lock")
 	}
-	for i, e := range events {
-		if err := s.insertEventMarshalled(s.tx, e, mData[i]); err != nil {
-			return err
+	for _, e := range events {
+		if err := s.insertEvent(s.tx, e); err != nil {
+			return nil, err
 		}
 	}
 
 	// Update the aggregates versions
 	if version == prevVersion {
-		return nil
+		return nil, nil
 	}
 	log.Debugf("updating aggregateType %s to version: %d", aggregateType, version)
 	if err := s.insertAggregateVersion(s.tx, &AggregateVersion{AggregateType: aggregateType, AggregateID: aggregateID, Version: version}); err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return events, nil
 }
 
-func (s *EventStore) RestoreEvents(events Events) error {
+func (s *EventStore) RestoreEvents(events []*StoredEvent) error {
 	versions := map[string]*AggregateVersion{}
 
 	// Write the events
@@ -301,7 +279,7 @@ func (s *EventStore) RestoreEvents(events Events) error {
 	return nil
 }
 
-func (s *EventStore) GetEvent(id *util.ID) (*Event, error) {
+func (s *EventStore) GetEvent(id *util.ID) (*StoredEvent, error) {
 	sb := eventSelect.Where(sq.Eq{"id": id})
 
 	q, args, err := sb.ToSql()
@@ -309,7 +287,7 @@ func (s *EventStore) GetEvent(id *util.ID) (*Event, error) {
 		return nil, errors.Wrap(err, "failed to build query")
 	}
 
-	var events Events
+	var events []*StoredEvent
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
@@ -330,9 +308,9 @@ func (s *EventStore) GetEvent(id *util.ID) (*Event, error) {
 	return events[0], nil
 }
 
-func (s *EventStore) GetEvents(start int64, count uint64) ([]*Event, error) {
+func (s *EventStore) GetEvents(start int64, count uint64) ([]*StoredEvent, error) {
 	if count < 1 {
-		return []*Event{}, nil
+		return []*StoredEvent{}, nil
 	}
 
 	sb := eventSelect.Where(sq.GtOrEq{"sequencenumber": start}).OrderBy("sequencenumber ASC").Limit(count)
@@ -342,7 +320,7 @@ func (s *EventStore) GetEvents(start int64, count uint64) ([]*Event, error) {
 		return nil, errors.Wrap(err, "failed to build query")
 	}
 
-	var events Events
+	var events []*StoredEvent
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
@@ -357,9 +335,9 @@ func (s *EventStore) GetEvents(start int64, count uint64) ([]*Event, error) {
 	return events, nil
 }
 
-func (s *EventStore) AggregateTypeGetEvents(aggregateType AggregateType, start int64, count uint64) ([]*Event, error) {
+func (s *EventStore) AggregateTypeGetEvents(aggregateType AggregateType, start int64, count uint64) ([]*StoredEvent, error) {
 	if count < 1 {
-		return []*Event{}, nil
+		return []*StoredEvent{}, nil
 	}
 
 	sb := eventSelect.Where(sq.And{sq.Eq{"aggregatetype": aggregateType}, sq.GtOrEq{"sequencenumber": start}}).OrderBy("sequencenumber ASC").Limit(count)
@@ -369,7 +347,7 @@ func (s *EventStore) AggregateTypeGetEvents(aggregateType AggregateType, start i
 		return nil, errors.Wrap(err, "failed to build query")
 	}
 
-	var events Events
+	var events []*StoredEvent
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
@@ -384,9 +362,9 @@ func (s *EventStore) AggregateTypeGetEvents(aggregateType AggregateType, start i
 	return events, nil
 }
 
-func (s *EventStore) StreamGetEvents(aggregateID string, startVersion int64, count uint64) ([]*Event, error) {
+func (s *EventStore) StreamGetEvents(aggregateID string, startVersion int64, count uint64) ([]*StoredEvent, error) {
 	if count < 1 {
-		return []*Event{}, nil
+		return []*StoredEvent{}, nil
 	}
 
 	sb := eventSelect.Where(sq.And{sq.Eq{"aggregateid": aggregateID}, sq.GtOrEq{"version": startVersion}}).OrderBy("version ASC").Limit(count)
@@ -396,7 +374,7 @@ func (s *EventStore) StreamGetEvents(aggregateID string, startVersion int64, cou
 		return nil, errors.Wrap(err, "failed to build query")
 	}
 
-	var events Events
+	var events []*StoredEvent
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
@@ -411,7 +389,7 @@ func (s *EventStore) StreamGetEvents(aggregateID string, startVersion int64, cou
 	return events, nil
 }
 
-func (s *EventStore) StreamGetLastEvent(aggregateID string) (*Event, error) {
+func (s *EventStore) StreamGetLastEvent(aggregateID string) (*StoredEvent, error) {
 	sb := eventSelect.Where(sq.And{sq.Eq{"aggregateid": aggregateID}}).OrderBy("version DESC").Limit(1)
 
 	q, args, err := sb.ToSql()
@@ -419,7 +397,7 @@ func (s *EventStore) StreamGetLastEvent(aggregateID string) (*Event, error) {
 		return nil, errors.Wrap(err, "failed to build query")
 	}
 
-	var events Events
+	var events []*StoredEvent
 	err = s.tx.Do(func(tx *db.WrappedTx) error {
 		rows, err := tx.Query(q, args...)
 		if err != nil {
