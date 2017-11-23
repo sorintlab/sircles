@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
 
@@ -61,9 +60,10 @@ func (e *StoredEvent) UnmarshalMetaData() (*EventMetaData, error) {
 }
 
 type EventMetaData struct {
-	CorrelationID *util.ID // ID correlating this event with other events
-	CausationID   *util.ID // event ID causing this event
-	GroupID       *util.ID // event group ID
+	CorrelationID   *util.ID // ID correlating this event with other events
+	CausationID     *util.ID // event ID causing this event
+	GroupID         *util.ID // event group ID
+	CommandIssuerID *util.ID // issuer of the command generating this event
 }
 
 type Event interface {
@@ -77,7 +77,7 @@ type EventData struct {
 	MetaData  []byte
 }
 
-func GenEventData(events []Event, correlationID, causationID, groupID *util.ID) ([]*EventData, error) {
+func GenEventData(events []Event, correlationID, causationID, groupID, issuerID *util.ID) ([]*EventData, error) {
 	eventsData := make([]*EventData, len(events))
 	for i, e := range events {
 		data, err := json.Marshal(e)
@@ -87,9 +87,10 @@ func GenEventData(events []Event, correlationID, causationID, groupID *util.ID) 
 
 		// augment events with common metadata
 		md := &EventMetaData{
-			CorrelationID: correlationID,
-			CausationID:   causationID,
-			GroupID:       groupID,
+			CorrelationID:   correlationID,
+			CausationID:     causationID,
+			GroupID:         groupID,
+			CommandIssuerID: issuerID,
 		}
 		metaData, err := json.Marshal(md)
 		if err != nil {
@@ -123,12 +124,6 @@ const (
 type EventType string
 
 const (
-	// We want to save executed commands as events to retrieve them
-	// in the read model and save in the events the correlation and causation
-	// with the command.
-	EventTypeCommandExecuted          EventType = "CommandExecuted"
-	EventTypeCommandExecutionFinished EventType = "CommandExecutionFinished"
-
 	// RolesTree Root Aggregate
 	// If we want to have transactional consistency between the roles and the
 	// hierarchy (to achieve ui transactional commands like update role that
@@ -181,11 +176,6 @@ const (
 
 func GetEventDataType(eventType EventType) interface{} {
 	switch eventType {
-	case EventTypeCommandExecuted:
-		return &EventCommandExecuted{}
-	case EventTypeCommandExecutionFinished:
-		return &EventCommandExecutionFinished{}
-
 	case EventTypeRoleCreated:
 		return &EventRoleCreated{}
 	case EventTypeRoleUpdated:
@@ -257,31 +247,6 @@ func GetEventDataType(eventType EventType) interface{} {
 	default:
 		panic(fmt.Errorf("unknown event type: %q", eventType))
 	}
-}
-
-type EventCommandExecuted struct {
-	Command *commands.Command
-}
-
-func NewEventCommandExecuted(command *commands.Command) *EventCommandExecuted {
-	return &EventCommandExecuted{
-		Command: command,
-	}
-}
-
-func (e *EventCommandExecuted) EventType() EventType {
-	return EventTypeCommandExecuted
-}
-
-type EventCommandExecutionFinished struct {
-}
-
-func NewEventCommandExecutionFinished(result interface{}) *EventCommandExecutionFinished {
-	return &EventCommandExecutionFinished{}
-}
-
-func (e *EventCommandExecutionFinished) EventType() EventType {
-	return EventTypeCommandExecutionFinished
 }
 
 type EventRoleCreated struct {

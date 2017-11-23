@@ -95,7 +95,7 @@ func NewCommandService(tx *db.Tx, readDB readdb.ReadDBService, uidGenerator comm
 }
 
 func (s *CommandService) writeEvents(events []eventstore.Event, command *commands.Command, groupID util.ID, aggregateType eventstore.AggregateType, aggregateID string, version int64) ([]*eventstore.StoredEvent, error) {
-	eventsData, err := eventstore.GenEventData(events, &command.CorrelationID, &command.ID, &groupID)
+	eventsData, err := eventstore.GenEventData(events, &command.CorrelationID, &command.ID, &groupID, &command.IssuerID)
 	if err != nil {
 		return nil, err
 	}
@@ -237,8 +237,6 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeUpdateRootRole, correlationID, causationID, callingMember.ID, &commands.UpdateRootRole{UpdateRootRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	if c.NameChanged {
 		if role.RoleType.IsCoreRoleType() {
@@ -342,8 +340,6 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 		}
 		events = append(events, eventstore.NewEventRoleAccountabilityUpdated(role.ID, accountability))
 	}
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -475,8 +471,6 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleCreateChildRole, correlationID, causationID, callingMember.ID, &commands.CircleCreateChildRole{RoleID: roleID, CreateRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	role := &models.Role{
 		Name:     c.Name,
@@ -526,8 +520,6 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 			events = append(events, eventstore.NewEventRoleChangedParent(pChild.ID, &role.ID))
 		}
 	}
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -681,8 +673,6 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleUpdateChildRole, correlationID, causationID, callingMember.ID, &commands.CircleUpdateChildRole{RoleID: roleID, UpdateRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	childsGroups, err := s.readDB.ChildRoles(ctx, curTlSeq, []util.ID{role.ID}, nil)
 	if err != nil {
@@ -928,8 +918,6 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 		events = append(events, eventstore.NewEventRoleAccountabilityUpdated(role.ID, accountability))
 	}
 
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
-
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
 		return nil, util.NilID, err
@@ -1163,8 +1151,6 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleDeleteChildRole, correlationID, causationID, callingMember.ID, &commands.CircleDeleteChildRole{RoleID: roleID, DeleteRoleChange: *c})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	skipchilds := []util.ID{}
 	for _, child := range childs {
@@ -1185,8 +1171,6 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 		return nil, util.NilID, err
 	}
 	events = append(events, es...)
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -1256,12 +1240,8 @@ func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID ut
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeSetRoleAdditionalContent, correlationID, causationID, callingMember.ID, commands.SetRoleAdditionalContent{RoleID: roleID, Content: content})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventRoleAdditionalContentSet(roleID, roleAdditionalContent))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -1452,9 +1432,6 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 
 	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, callingMemberID, commands.NewCommandCreateMember(c, passwordHash))
 
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
-
 	events = append(events, eventstore.NewEventMemberCreated(member))
 
 	events = append(events, eventstore.NewEventMemberAvatarSet(member.ID, avatar))
@@ -1466,8 +1443,6 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 	if c.MatchUID != "" {
 		events = append(events, eventstore.NewEventMemberMatchUIDSet(member.ID, c.MatchUID))
 	}
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.MemberAggregate, member.ID.String(), version)
 	if err != nil {
@@ -1628,16 +1603,12 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateMember(c))
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventMemberUpdated(member))
 
 	if avatar != nil {
 		events = append(events, eventstore.NewEventMemberAvatarSet(member.ID, avatar))
 	}
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.MemberAggregate, member.ID.String(), version)
 	if err != nil {
@@ -1706,12 +1677,7 @@ func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID
 
 	command := commands.NewCommand(commands.CommandTypeSetMemberPassword, correlationID, causationID, callingMember.ID, commands.SetMemberPassword{MemberID: memberID, PasswordHash: passwordHash})
 
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
-
 	events = append(events, eventstore.NewEventMemberPasswordSet(memberID, passwordHash))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.MemberAggregate, memberID.String(), version)
 	if err != nil {
@@ -1782,12 +1748,7 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 	// NOTE(sgotti) Changing a password doesn't require a new timeline since there's no history of previous password, the command will have an empty timeline
 	command := commands.NewCommand(commands.CommandTypeSetMemberMatchUID, correlationID, causationID, callingMemberID, commands.SetMemberMatchUID{MemberID: memberID, MatchUID: matchUID})
 
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
-
 	events = append(events, eventstore.NewEventMemberMatchUIDSet(memberID, matchUID))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.MemberAggregate, memberID.String(), version)
 	if err != nil {
@@ -1881,12 +1842,7 @@ func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTens
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCreateTension, correlationID, causationID, callingMember.ID, commands.NewCommandCreateTension(c))
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
-
 	events = append(events, eventstore.NewEventTensionCreated(tension, callingMember.ID, c.RoleID))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.TensionAggregate, tension.ID.String(), version)
 	if err != nil {
@@ -2027,16 +1983,12 @@ func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTens
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeUpdateTension, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateTension(c))
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	if roleChanged {
 		events = append(events, eventstore.NewEventTensionRoleChanged(tension.ID, prevRoleID, c.RoleID))
 	}
 
 	events = append(events, eventstore.NewEventTensionUpdated(tension))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.TensionAggregate, tension.ID.String(), version)
 	if err != nil {
@@ -2107,12 +2059,8 @@ func (s *CommandService) CloseTension(ctx context.Context, c *change.CloseTensio
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCloseTension, correlationID, causationID, callingMember.ID, commands.NewCommandCloseTension(c))
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventTensionClosed(tension.ID, c.Reason))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.TensionAggregate, tension.ID.String(), version)
 	if err != nil {
@@ -2180,12 +2128,8 @@ func (s *CommandService) CircleAddDirectMember(ctx context.Context, roleID util.
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleAddDirectMember, correlationID, causationID, callingMember.ID, &commands.CircleAddDirectMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventCircleDirectMemberAdded(roleID, memberID))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2256,12 +2200,8 @@ func (s *CommandService) CircleRemoveDirectMember(ctx context.Context, roleID ut
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleRemoveDirectMember, correlationID, causationID, callingMember.ID, &commands.CircleRemoveDirectMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventCircleDirectMemberRemoved(roleID, memberID))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2361,8 +2301,6 @@ func (s *CommandService) CircleSetLeadLinkMember(ctx context.Context, roleID, me
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleSetLeadLinkMember, correlationID, causationID, callingMember.ID, &commands.CircleSetLeadLinkMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	// Remove previous lead link
 	if len(leadLinkMemberEdges) > 0 {
@@ -2374,8 +2312,6 @@ func (s *CommandService) CircleSetLeadLinkMember(ctx context.Context, roleID, me
 	}
 
 	events = append(events, eventstore.NewEventCircleLeadLinkMemberSet(roleID, leadLinkRole.ID, memberID))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2495,16 +2431,12 @@ func (s *CommandService) CircleUnsetLeadLinkMember(ctx context.Context, roleID u
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleUnsetLeadLinkMember, correlationID, causationID, callingMember.ID, &commands.CircleUnsetLeadLinkMember{RoleID: roleID})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	es, err := s.circleUnsetLeadLinkMember(ctx, curTl, role.ID)
 	if err != nil {
 		return nil, util.NilID, err
 	}
 	events = append(events, es...)
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2583,8 +2515,6 @@ func (s *CommandService) CircleSetCoreRoleMember(ctx context.Context, roleType m
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleSetCoreRoleMember, correlationID, causationID, callingMember.ID, &commands.CircleSetCoreRoleMember{RoleType: roleType, RoleID: roleID, MemberID: memberID, ElectionExpiration: electionExpiration})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	// Remove previous core role member
 	if len(coreRoleMemberEdges) > 0 {
@@ -2592,8 +2522,6 @@ func (s *CommandService) CircleSetCoreRoleMember(ctx context.Context, roleType m
 	}
 
 	events = append(events, eventstore.NewEventCircleCoreRoleMemberSet(role.ID, coreRole.ID, memberID, roleType, electionExpiration))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2693,16 +2621,12 @@ func (s *CommandService) CircleUnsetCoreRoleMember(ctx context.Context, roleType
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeCircleUnsetCoreRoleMember, correlationID, causationID, callingMember.ID, &commands.CircleUnsetCoreRoleMember{RoleType: roleType, RoleID: roleID})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	es, err := s.circleUnsetCoreRoleMember(ctx, curTl, roleType, role.ID)
 	if err != nil {
 		return nil, util.NilID, err
 	}
 	events = append(events, es...)
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2793,12 +2717,8 @@ func (s *CommandService) RoleAddMember(ctx context.Context, roleID util.ID, memb
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeRoleAddMember, correlationID, causationID, callingMember.ID, &commands.RoleAddMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventRoleMemberAdded(roleID, memberID, focus, noCoreMember))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2876,12 +2796,8 @@ func (s *CommandService) RoleRemoveMember(ctx context.Context, roleID util.ID, m
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeRoleRemoveMember, correlationID, causationID, callingMember.ID, &commands.RoleRemoveMember{RoleID: roleID, MemberID: memberID})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventRoleMemberRemoved(roleID, memberID))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -2968,12 +2884,8 @@ func (s *CommandService) RoleUpdateMember(ctx context.Context, roleID util.ID, m
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeRoleUpdateMember, correlationID, causationID, callingMember.ID, &commands.RoleUpdateMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	events = append(events, eventstore.NewEventRoleMemberUpdated(roleID, memberID, focus, noCoreMember))
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -3034,8 +2946,6 @@ func (s *CommandService) SetupRootRole() (util.ID, error) {
 	events := []eventstore.Event{}
 
 	command := commands.NewCommand(commands.CommandTypeSetupRootRole, correlationID, causationID, util.NilID, &commands.SetupRootRole{})
-	commandEvent := eventstore.NewEventCommandExecuted(command)
-	events = append(events, commandEvent)
 
 	role.ID = s.uidGenerator.UUID("RootRole")
 
@@ -3046,8 +2956,6 @@ func (s *CommandService) SetupRootRole() (util.ID, error) {
 		return util.NilID, err
 	}
 	events = append(events, es...)
-
-	events = append(events, eventstore.NewEventCommandExecutionFinished(command))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {

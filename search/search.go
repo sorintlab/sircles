@@ -234,9 +234,6 @@ func (s *SearchEngine) HandlEvent(event *eventstore.StoredEvent) error {
 	}
 
 	switch event.EventType {
-	case eventstore.EventTypeCommandExecuted:
-	case eventstore.EventTypeCommandExecutionFinished:
-
 	case eventstore.EventTypeRoleCreated:
 		data := data.(*eventstore.EventRoleCreated)
 		reindexRoles = append(reindexRoles, data.RoleID)

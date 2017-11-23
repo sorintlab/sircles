@@ -13,10 +13,10 @@ import (
 func TestWriteEvents(t *testing.T) {
 	events := []*EventData{
 		&EventData{
-			EventType: EventTypeCommandExecuted,
+			EventType: EventTypeRoleCreated,
 		},
 		&EventData{
-			EventType: EventTypeRoleCreated,
+			EventType: EventTypeRoleUpdated,
 		},
 		&EventData{
 			EventType: EventTypeRoleMemberAdded,
@@ -106,13 +106,12 @@ func TestWriteEvents(t *testing.T) {
 }
 
 func TestRestoreEvents(t *testing.T) {
-
 	events1 := []*EventData{
 		&EventData{
-			EventType: EventTypeCommandExecuted,
+			EventType: EventTypeRoleCreated,
 		},
 		&EventData{
-			EventType: EventTypeRoleCreated,
+			EventType: EventTypeRoleUpdated,
 		},
 		&EventData{
 			EventType: EventTypeRoleMemberAdded,
@@ -121,10 +120,10 @@ func TestRestoreEvents(t *testing.T) {
 
 	events2 := []*EventData{
 		&EventData{
-			EventType: EventTypeCommandExecuted,
+			EventType: EventTypeRoleCreated,
 		},
 		&EventData{
-			EventType: EventTypeRoleCreated,
+			EventType: EventTypeRoleUpdated,
 		},
 		&EventData{
 			EventType: EventTypeRoleMemberAdded,
