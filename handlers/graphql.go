@@ -11,6 +11,8 @@ import (
 	"github.com/sorintlab/sircles/command"
 	"github.com/sorintlab/sircles/config"
 	"github.com/sorintlab/sircles/db"
+	"github.com/sorintlab/sircles/eventstore"
+	ln "github.com/sorintlab/sircles/listennotify"
 	"github.com/sorintlab/sircles/readdb"
 	"github.com/sorintlab/sircles/search"
 
@@ -19,16 +21,24 @@ import (
 
 type graphqlHandler struct {
 	config         *config.Config
-	db             *db.DB
+	dataDir        string
+	readDB         *db.DB
+	readDBListener readdb.ReadDBListener
+	es             *eventstore.EventStore
+	lnf            ln.ListenerFactory
 	searchEngine   *search.SearchEngine
 	schema         *graphql.Schema
 	memberProvider auth.MemberProvider
 }
 
-func NewGraphQLHandler(config *config.Config, db *db.DB, searchEngine *search.SearchEngine, schema *graphql.Schema, memberProvider auth.MemberProvider) *graphqlHandler {
+func NewGraphQLHandler(config *config.Config, dataDir string, readDB *db.DB, readDBListener readdb.ReadDBListener, es *eventstore.EventStore, lnf ln.ListenerFactory, searchEngine *search.SearchEngine, schema *graphql.Schema, memberProvider auth.MemberProvider) *graphqlHandler {
 	return &graphqlHandler{
 		config:         config,
-		db:             db,
+		dataDir:        dataDir,
+		readDB:         readDB,
+		readDBListener: readDBListener,
+		es:             es,
+		lnf:            lnf,
 		searchEngine:   searchEngine,
 		schema:         schema,
 		memberProvider: memberProvider,
@@ -90,25 +100,23 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	tx, err := h.db.NewTx()
-	if err != nil {
-		log.Errorf("err: %+v", err)
-		http.Error(w, "", http.StatusInternalServerError)
-		return
-	}
-	readDBService, err := readdb.NewReadDBService(tx)
-	if err != nil {
-		log.Errorf("err: %+v", err)
-		http.Error(w, "", http.StatusInternalServerError)
-		return
-	}
-	if h.config.AdminMember != "" {
-		readDBService.SetForceAdminMemberUserName(h.config.AdminMember)
-	}
-	commandService := command.NewCommandService(tx, readDBService, nil, nil, h.memberProvider != nil)
+	commandService := command.NewCommandService(h.dataDir, h.readDB, h.es, nil, h.lnf, h.memberProvider != nil)
+
+	// NOTE(sgotti) only for performance reasons we want to query the readdb
+	// within a single transaction. Since the graphql library calls various
+	// methods we don't have a final point inside the graphql schema exec func where
+	// to commit/rollback the transaction. So the hack is to create here an
+	// unstarted transaction, start it inside the schema when needed and
+	// commit/rollback it here if it has been started.
+	// For graphql mutations we execute the command, wait for the readdb to have
+	// applied the events and then query it to return the response.
+
+	utx := h.readDB.NewUnstartedTx()
 
 	ctx := r.Context()
-	ctx = context.WithValue(ctx, "service", readDBService)
+	ctx = context.WithValue(ctx, "utx", utx)
+	ctx = context.WithValue(ctx, "config", h.config)
+	ctx = context.WithValue(ctx, "readdblistener", h.readDBListener)
 	ctx = context.WithValue(ctx, "commandservice", commandService)
 	ctx = context.WithValue(ctx, "memberprovider", h.memberProvider)
 	ctx = context.WithValue(ctx, "searchEngine", h.searchEngine)
@@ -117,33 +125,8 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("graphql exec")
 	response := h.schema.Exec(ctx, params.Query, params.OperationName, params.Variables)
 
-	// NOTE(sgotti)
-	// The first iteration used a simpler model where every service call done
-	// inside the graphql Schema.Exec used its own managed transaction. Thanks
-	// the db immutable model the full result was consistent because we asked
-	// the same timeline to every service function. So there's no need to wrap
-	// the full graphql call inside an unique db transaction
-	// This version instead uses an unique db transaction with a serializable
-	// isolation level.
-	// Having only one transaction is faster and can be useful as an example for
-	// other implementation that requires an unique transaction to get
-	// consistent results
-	// As an addition a query with multiple mutations will execute them inside
-	// the same transaction so they will be committed only if all the mutations
-	// have success.
-
-	// To have one transaction per graphql call the unique solution is to create
-	// a service instance per call before calling schema.Exec.
-	// Since neelance/graphql-go accepts a single instance at schema creation
-	// time the unique thing we can do is pass this service instance using
-	// the context (I'm not sure this a good way to use the context).
-
-	// TODO as an addition, we could parse the graphql query to know if the
-	// query contains only queries, only mutation or both we could create
-	// different kind of transactions (a readonly one for query only and a
-	// readwrite for mutations).
 	if len(response.Errors) > 0 {
-		tx.Rollback()
+		utx.Rollback()
 		log.Errorf("graphql errors: %v", response.Errors)
 		for _, err := range response.Errors {
 			log.Errorf("err: %+v", err.ResolverError)
@@ -151,8 +134,7 @@ func (h *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	// TODO(sgotti) hanle postgresql serialization error and retry mutations
-	if err := tx.Commit(); err != nil {
+	if err := utx.Commit(); err != nil {
 		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return

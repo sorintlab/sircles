@@ -8,6 +8,7 @@ import (
 	slog "github.com/sorintlab/sircles/log"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/readdb"
+	"github.com/sorintlab/sircles/util"
 
 	"github.com/coreos/go-oidc"
 	"github.com/pkg/errors"
@@ -55,20 +56,20 @@ func GetMemberInfo(ctx context.Context, authenticator Authenticator, memberProvi
 	return memberInfo, nil
 }
 
-func FindMatchingMember(ctx context.Context, readDB readdb.ReadDBService, matchUID string) (*models.Member, error) {
-	member, err := readDB.MemberByMatchUID(ctx, matchUID)
+func FindMatchingMember(ctx context.Context, readDBService readdb.ReadDBService, matchUID string) (*models.Member, error) {
+	member, err := readDBService.MemberByMatchUID(ctx, matchUID)
 	if err != nil {
 		return nil, err
 	}
 	if member == nil {
 		// if we cannot find an user with matchUID try by username and accept it
 		// only if the returned member has an empty matchUID
-		member, err = readDB.MemberByUserName(ctx, readDB.CurTimeLine(ctx).Number(), matchUID)
+		member, err = readDBService.MemberByUserName(ctx, readDBService.CurTimeLine(ctx).Number(), matchUID)
 		if err != nil {
 			return nil, err
 		}
 		if member != nil {
-			memberMatchUID, err := readDB.MemberMatchUID(ctx, member.ID)
+			memberMatchUID, err := readDBService.MemberMatchUID(ctx, member.ID)
 			if err != nil {
 				return nil, err
 			}
@@ -80,14 +81,14 @@ func FindMatchingMember(ctx context.Context, readDB readdb.ReadDBService, matchU
 	return member, nil
 }
 
-func ImportMember(ctx context.Context, readDB readdb.ReadDBService, commandService *command.CommandService, memberProvider MemberProvider, loginName string) (*models.Member, error) {
+func ImportMember(ctx context.Context, readDBService readdb.ReadDBService, commandService *command.CommandService, memberProvider MemberProvider, loginName string) (*change.CreateMemberResult, util.ID, error) {
 	if memberProvider == nil {
-		return nil, errors.New("nil member provider")
+		return nil, util.NilID, errors.New("nil member provider")
 	}
 
 	memberInfo, err := memberProvider.MemberInfo(ctx, loginName)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to retrieve member info")
+		return nil, util.NilID, errors.Wrapf(err, "failed to retrieve member info")
 	}
 	log.Debugf("memberInfo: %#+v", memberInfo)
 
@@ -98,13 +99,6 @@ func ImportMember(ctx context.Context, readDB readdb.ReadDBService, commandServi
 		FullName: memberInfo.FullName,
 		Email:    memberInfo.Email,
 	}
-	if _, _, err = commandService.CreateMemberInternal(ctx, c, false, true); err != nil {
-		return nil, errors.Wrapf(err, "failed to create member")
-	}
-	member, err := FindMatchingMember(ctx, readDB, memberInfo.MatchUID)
-	if err != nil {
-		return nil, err
-	}
 
-	return member, nil
+	return commandService.CreateMemberInternal(ctx, c, false, true)
 }

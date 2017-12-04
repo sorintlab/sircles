@@ -17,10 +17,17 @@ import (
 	"github.com/sorintlab/sircles/change"
 	"github.com/sorintlab/sircles/command"
 	"github.com/sorintlab/sircles/common"
+	"github.com/sorintlab/sircles/config"
 	"github.com/sorintlab/sircles/db"
+	"github.com/sorintlab/sircles/eventhandler"
+	"github.com/sorintlab/sircles/eventstore"
+	ln "github.com/sorintlab/sircles/listennotify"
+	"github.com/sorintlab/sircles/lock"
+	slog "github.com/sorintlab/sircles/log"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/readdb"
 	"github.com/sorintlab/sircles/util"
+	"go.uber.org/zap/zapcore"
 
 	graphql "github.com/neelance/graphql-go"
 	"github.com/satori/go.uuid"
@@ -28,6 +35,7 @@ import (
 
 func init() {
 	test = true
+	slog.SetLevel(zapcore.ErrorLevel)
 }
 
 var rootQuery = `
@@ -301,10 +309,10 @@ func (tg *TestTimeGenerator) Now() time.Time {
 	return tg.t
 }
 
-func initRootRole(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDBService, commandService *command.CommandService) {
+func initRootRole(ctx context.Context, t *testing.T, rootRoleID util.ID, readDBListener readdb.ReadDBListener, commandService *command.CommandService) {
 }
 
-func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDBService, commandService *command.CommandService) {
+func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDBListener readdb.ReadDBListener, commandService *command.CommandService) {
 	membersIDs := map[string]util.ID{}
 	circlesIDs := map[string]util.ID{"rootRole": rootRoleID}
 	rolesIDs := map[string]util.ID{}
@@ -318,10 +326,15 @@ func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB rea
 			Email:    userName + "@example.com",
 			Password: "password",
 		}
-		r, _, err := commandService.CreateMember(ctx, c)
+		log.Debugf("create member %v", c)
+		r, groupID, err := commandService.CreateMember(ctx, c)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
 		membersIDs[userName] = *r.MemberID
 	}
 
@@ -332,8 +345,12 @@ func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB rea
 			RoleType: models.RoleTypeNormal,
 			Name:     name,
 		}
-		r, _, err := commandService.CircleCreateChildRole(ctx, rootRoleID, rc)
+		log.Debugf("create root role child %v", rc)
+		r, groupID, err := commandService.CircleCreateChildRole(ctx, rootRoleID, rc)
 		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		rolesIDs[name] = *r.RoleID
@@ -346,8 +363,12 @@ func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB rea
 			RoleType: models.RoleTypeCircle,
 			Name:     name,
 		}
-		rres, _, err := commandService.CircleCreateChildRole(ctx, rootRoleID, rc)
+		log.Debugf("create root role circle %v", rc)
+		rres, groupID, err := commandService.CircleCreateChildRole(ctx, rootRoleID, rc)
 		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		circlesIDs[name] = *rres.RoleID
@@ -359,8 +380,12 @@ func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB rea
 				RoleType: models.RoleTypeNormal,
 				Name:     name,
 			}
-			r, _, err := commandService.CircleCreateChildRole(ctx, *rres.RoleID, rc)
+			log.Debugf("create chile role sub role %v", rc)
+			r, groupID, err := commandService.CircleCreateChildRole(ctx, *rres.RoleID, rc)
 			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			rolesIDs[name] = *r.RoleID
@@ -373,27 +398,58 @@ func initBasic(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB rea
 	//t.Logf("roles: %v", rolesIDs)
 
 	// Assign member to some core role and normal roles
-	if _, _, err := commandService.CircleSetLeadLinkMember(ctx, circlesIDs["rootRole-circle01"], membersIDs["user02"]); err != nil {
+	log.Debugf("add members to role")
+
+	var groupID util.ID
+	var err error
+	if _, groupID, err = commandService.CircleSetLeadLinkMember(ctx, circlesIDs["rootRole-circle01"], membersIDs["user02"]); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, _, err := commandService.CircleAddDirectMember(ctx, circlesIDs["rootRole-circle01"], membersIDs["user05"]); err != nil {
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, _, err := commandService.CircleSetLeadLinkMember(ctx, circlesIDs["rootRole-circle02"], membersIDs["user03"]); err != nil {
+	if _, groupID, err = commandService.CircleAddDirectMember(ctx, circlesIDs["rootRole-circle01"], membersIDs["user05"]); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, _, err := commandService.CircleSetCoreRoleMember(ctx, models.RoleTypeSecretary, circlesIDs["rootRole-circle02"], membersIDs["user03"], nil); err != nil {
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if _, _, err := commandService.CircleSetCoreRoleMember(ctx, models.RoleTypeRepLink, circlesIDs["rootRole-circle03"], membersIDs["user04"], nil); err != nil {
+	if _, groupID, err = commandService.CircleSetLeadLinkMember(ctx, circlesIDs["rootRole-circle02"], membersIDs["user03"]); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, groupID, err = commandService.CircleSetCoreRoleMember(ctx, models.RoleTypeSecretary, circlesIDs["rootRole-circle02"], membersIDs["user03"], nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, groupID, err = commandService.CircleSetCoreRoleMember(ctx, models.RoleTypeRepLink, circlesIDs["rootRole-circle03"], membersIDs["user04"], nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	r := circlesIDs["rootRole-circle01"]
+	ctx = context.WithValue(ctx, "userid", membersIDs["user02"].String())
+	log.Debugf("create tension")
+	if _, groupID, err = commandService.CreateTension(ctx, &change.CreateTensionChange{Title: "tension01", RoleID: &r}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 }
 
-type initFunc func(ctx context.Context, t *testing.T, rootRoleID util.ID, readDB readdb.ReadDBService, commandService *command.CommandService)
+type initFunc func(ctx context.Context, t *testing.T, rootRoleID util.ID, readDBListener readdb.ReadDBListener, commandService *command.CommandService)
 
 type Test struct {
 	Query          string
@@ -401,16 +457,19 @@ type Test struct {
 	Variables      string
 	ExpectedResult string
 	Error          error
+	StartSleep     time.Duration
 }
 
 func RunTests(t *testing.T, initFunc initFunc, tests []*Test) {
-	runTests(t, initFunc, tests, false)
+	runTests(t, initFunc, tests, false, false)
 }
 
-func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
+func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel, skip bool) {
+	ctx := context.Background()
+
 	tmpDir, err := ioutil.TempDir("", "")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir(%q, %q) got error %q", "", "", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -426,11 +485,6 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 		log.Fatalf("unknown db type")
 	}
 
-	// skip test when running on sqlite3 due to different concurrency behavior
-	if parallel && dbType == db.Sqlite3 {
-		t.Skipf("testing with sqlite3 db")
-	}
-
 	pgConnString := os.Getenv("PG_CONNSTRING")
 
 	var uidGenerator common.UIDGenerator
@@ -438,50 +492,121 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 	uidGenerator = NewTestUIDGen()
 	timeGenerator = NewTestTimeGenerator()
 
-	var tdb *db.DB
+	var readDB, esDB *db.DB
+	var readDBLf, esDBLf ln.ListenerFactory
+	var readDBNf, esDBNf ln.NotifierFactory
+	var lkf lock.LockFactory
 
 	switch dbType {
 	case "sqlite3":
-		dbpath := filepath.Join(tmpDir, "db")
-		tdb, err = db.NewDB("sqlite3", dbpath)
+		readDBPath := filepath.Join(tmpDir, "readdb")
+		esDBPath := filepath.Join(tmpDir, "esdb")
+
+		readDB, err = db.NewDB("sqlite3", readDBPath)
+		esDB, err = db.NewDB("sqlite3", esDBPath)
+
+		localLN := ln.NewLocalListenNotify()
+
+		readDBLf = ln.NewLocalListenerFactory(localLN)
+		readDBNf = ln.NewLocalNotifierFactory(localLN)
+
+		esDBLf = ln.NewLocalListenerFactory(localLN)
+		esDBNf = ln.NewLocalNotifierFactory(localLN)
+
+		localLocks := lock.NewLocalLocks()
+		lkf = lock.NewLocalLockFactory(localLocks)
+
 	case "postgres":
-		dbname := "postgres" + filepath.Base(tmpDir)
+		readDBName := "readdb" + filepath.Base(tmpDir)
+		esDBName := "esdb" + filepath.Base(tmpDir)
 
 		pgdb, err := sql.Open("postgres", fmt.Sprintf(pgConnString, "postgres"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		defer func() {
-			_, err = pgdb.Exec(fmt.Sprintf("drop database %s", dbname))
-			if err != nil {
-				t.Logf("unexpected error: %v", err)
+			for _, dbname := range []string{readDBName, esDBName} {
+				_, err = pgdb.Exec(fmt.Sprintf("drop database %s", dbname))
+				if err != nil {
+					t.Logf("unexpected error: %v", err)
+				}
 			}
 			pgdb.Close()
 		}()
 
-		_, err = pgdb.Exec(fmt.Sprintf("drop database if exists %s", dbname))
+		for _, dbname := range []string{readDBName, esDBName} {
+			_, err = pgdb.Exec(fmt.Sprintf("drop database if exists %s", dbname))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			_, err = pgdb.Exec(fmt.Sprintf("create database %s", dbname))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		}
+
+		readDB, err = db.NewDB("postgres", fmt.Sprintf(pgConnString, readDBName))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		_, err = pgdb.Exec(fmt.Sprintf("create database %s", dbname))
+		esDB, err = db.NewDB("postgres", fmt.Sprintf(pgConnString, esDBName))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		tdb, err = db.NewDB("postgres", fmt.Sprintf(pgConnString, dbname))
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		readDBLf = ln.NewPGListenerFactory(fmt.Sprintf(pgConnString, readDBName))
+		readDBNf = ln.NewPGNotifierFactory()
+
+		esDBLf = ln.NewPGListenerFactory(fmt.Sprintf(pgConnString, esDBName))
+		esDBNf = ln.NewPGNotifierFactory()
+
+		lkf = lock.NewPGLockFactory(common.EventHandlersLockSpace, esDB)
 	default:
 		log.Fatalf("unknown db type")
 	}
 
-	// Populate/migrate db
-	if err := tdb.Migrate(); err != nil {
+	// Populate/migrate readdb
+	if err := readDB.Migrate("readdb", readdb.Migrations); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	defer tdb.Close()
+	// Populate/migrate esdb
+	if err := esDB.Migrate("eventstore", eventstore.Migrations); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer readDB.Close()
+	defer esDB.Close()
+
+	es := eventstore.NewEventStore(esDB, esDBNf)
+	es.SetTimeGenerator(timeGenerator)
+
+	readDBh := readdb.NewDBEventHandler(readDB, es, readDBNf)
+	mrh := eventhandler.NewMemberRequestHandler(es, uidGenerator)
+	drth, err := eventhandler.NewDeletedRoleTensionHandler(tmpDir, es, uidGenerator)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stop := make(chan struct{})
+	endChs := []chan struct{}{}
+	for _, h := range []eventhandler.EventHandler{readDBh, mrh, drth} {
+		endCh, err := eventhandler.RunEventHandler(h, stop, esDBLf, lkf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		endChs = append(endChs, endCh)
+	}
+	// defer close if it the tests exists before the close(stop) below, we have
+	// to check that the channel hasn't been already closed
+	defer func() {
+		if stop != nil {
+			close(stop)
+			for _, endCh := range endChs {
+				<-endCh
+			}
+		}
+	}()
 
 	resolver := NewResolver()
 	schema, err := graphql.ParseSchema(Schema, resolver)
@@ -489,18 +614,14 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 		t.Fatal(err)
 	}
 
-	tx, err := tdb.NewTx()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	readDBService, err := readdb.NewReadDBService(tx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	commandService := command.NewCommandService(tx, readDBService, uidGenerator, timeGenerator, false)
+	commandService := command.NewCommandService(tmpDir, readDB, es, uidGenerator, esDBLf, false)
 
-	rootRoleID, err := commandService.SetupRootRole()
+	rootRoleID, groupID, err := commandService.SetupRootRole()
 	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	readDBListener := readdb.NewDBListener(readDB, readDBLf)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -514,23 +635,29 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 		},
 	}
 
-	ctx := context.Background()
 	initMembersIDs := []util.ID{}
 	for _, c := range initMemberChanges {
-		res, _, err := commandService.CreateMemberInternal(ctx, c, false, false)
+		res, groupID, err := commandService.CreateMemberInternal(ctx, c, false, false)
 		if err != nil {
-			panic(err)
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		initMembersIDs = append(initMembersIDs, *res.MemberID)
 	}
 
+	log.Debugf("initMembersIDs: %v", initMembersIDs)
+
 	ctx = context.WithValue(ctx, "userid", initMembersIDs[0].String())
 
-	initFunc(ctx, t, rootRoleID, readDBService, commandService)
+	initFunc(ctx, t, rootRoleID, readDBListener, commandService)
 
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	close(stop)
+	for _, endCh := range endChs {
+		<-endCh
 	}
+	stop = nil
 
 	if parallel {
 		// when running concurrent tests use the default uid generator or the
@@ -538,10 +665,33 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 		uidGenerator = &common.DefaultUidGenerator{}
 	}
 
+	readDBh = readdb.NewDBEventHandler(readDB, es, readDBNf)
+	mrh = eventhandler.NewMemberRequestHandler(es, uidGenerator)
+	drth, err = eventhandler.NewDeletedRoleTensionHandler(tmpDir, es, uidGenerator)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	stop2 := make(chan struct{})
+	endChs2 := []chan struct{}{}
+	for _, h := range []eventhandler.EventHandler{readDBh, mrh, drth} {
+		endCh, err := eventhandler.RunEventHandler(h, stop2, esDBLf, lkf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		endChs2 = append(endChs2, endCh)
+	}
+	defer func() {
+		close(stop2)
+		for _, endCh := range endChs2 {
+			<-endCh
+		}
+	}()
+
 	if !parallel {
 		for i, test := range tests {
 			t.Run(strconv.Itoa(i+1), func(t *testing.T) {
-				result := RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, test)
+				result := RunTest(ctx, t, tmpDir, schema, readDB, readDBListener, es, uidGenerator, esDBLf, test)
 				if len(result.Errors) != 0 {
 					re := result.Errors[0]
 
@@ -559,7 +709,7 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 				if !bytes.Equal(got, want) {
 					t.Logf("want: %s", want)
 					t.Logf("got:  %s", got)
-					t.Fatal("want: %s, got: %s", want, got)
+					t.Fatalf("want: %s, got: %s", want, got)
 				}
 			})
 		}
@@ -568,10 +718,16 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 		var m sync.Mutex
 		results := []*graphql.Response{}
 		for _, test := range tests {
+			// use different data dirs for the parallel tests so they'll use use
+			// different aggregates snapshot dbs
+			testTmpDir, err := ioutil.TempDir(tmpDir, "")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			wg.Add(1)
 			go func(test *Test) {
 				defer wg.Done()
-				result := RunTest(ctx, t, schema, tdb, uidGenerator, timeGenerator, test)
+				result := RunTest(ctx, t, testTmpDir, schema, readDB, readDBListener, es, uidGenerator, esDBLf, test)
 				m.Lock()
 				results = append(results, result)
 				m.Unlock()
@@ -583,7 +739,14 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 		// for that specific tests)
 		matchedResults := make([]bool, len(results))
 		for _, test := range tests {
+			//t.Logf("test.Error: %v", test.Error)
 			for i, result := range results {
+				//t.Logf("matchedResults: %v, len(tests): %d", matchedResults, len(tests))
+				//t.Logf("i: %d", i)
+				//t.Logf("result.Errors: %+v", result.Errors)
+				//for _, err := range result.Errors {
+				//	t.Logf("err: %+v", err.ResolverError)
+				//}
 				// skip already matched result
 				if matchedResults[i] == true {
 					continue
@@ -614,6 +777,7 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 				}
 			}
 		}
+		//t.Logf("matchedResults: %v, len(tests): %d", matchedResults, len(tests))
 		mc := 0
 		for _, mr := range matchedResults {
 			if mr == true {
@@ -621,12 +785,17 @@ func runTests(t *testing.T, initFunc initFunc, tests []*Test, parallel bool) {
 			}
 		}
 		if mc != len(tests) {
-			t.Fatalf("only %d of %d tests matched expected results/errors", mc, len(tests))
+			err := fmt.Errorf("only %d of %d tests matched expected results/errors", mc, len(tests))
+			if skip {
+				t.Skip(err)
+			} else {
+				t.Fatal(err)
+			}
 		}
 	}
 }
 
-func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.DB, uidGenerator common.UIDGenerator, tg common.TimeGenerator, test *Test) *graphql.Response {
+func RunTest(ctx context.Context, t *testing.T, tmpDir string, schema *graphql.Schema, db *db.DB, readDBListener readdb.ReadDBListener, es *eventstore.EventStore, uidGenerator common.UIDGenerator, esDBLf ln.ListenerFactory, test *Test) *graphql.Response {
 	var variables map[string]interface{}
 	if len(test.Variables) > 0 {
 		if err := json.Unmarshal([]byte(test.Variables), &variables); err != nil {
@@ -634,27 +803,18 @@ func RunTest(ctx context.Context, t *testing.T, schema *graphql.Schema, db *db.D
 		}
 	}
 
-	tx, err := db.NewTx()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	readDBService, err := readdb.NewReadDBService(tx)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	commandService := command.NewCommandService(tx, readDBService, uidGenerator, tg, false)
+	time.Sleep(test.StartSleep)
 
-	ctx = context.WithValue(ctx, "service", readDBService)
+	commandService := command.NewCommandService(tmpDir, db, es, uidGenerator, esDBLf, false)
+
+	utx := db.NewUnstartedTx()
+	defer utx.Rollback()
+
+	ctx = context.WithValue(ctx, "utx", utx)
+	ctx = context.WithValue(ctx, "config", &config.Config{})
+	ctx = context.WithValue(ctx, "readdblistener", readDBListener)
 	ctx = context.WithValue(ctx, "commandservice", commandService)
 	result := schema.Exec(ctx, test.Query, test.OperationName, variables)
-
-	if len(result.Errors) == 0 {
-		if err = tx.Commit(); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		} else {
-			tx.Rollback()
-		}
-	}
 
 	return result
 }
@@ -752,17 +912,17 @@ func TestTimeLines(t *testing.T) {
 	RunTests(t, initBasic, []*Test{
 		{
 			Query: `
-				query timeLines($first: Int) {
-					timeLines(first: $first) {
-						edges {
-							timeLine {
-								id
-							}
-							cursor
+			query timeLines($first: Int) {
+				timeLines(first: $first) {
+					edges {
+						timeLine {
+							id
 						}
-						hasMoreData
+						cursor
 					}
+					hasMoreData
 				}
+			}
 			`,
 			Variables: `
 			{
@@ -780,21 +940,21 @@ func TestTimeLines(t *testing.T) {
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5NjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509030996000000000"
+							"id": "1509030980000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5OTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509030999000000000"
+							"id": "1509030981000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031002000000000"
+							"id": "1509030982000000000"
 						}
 					}
 					],
@@ -805,22 +965,22 @@ func TestTimeLines(t *testing.T) {
 		},
 		{
 			Query: `
-				query timeLines($first: Int, $after: String) {
-					timeLines(first: $first, after: $after) {
-						edges {
-							timeLine {
-								id
-							}
-							cursor
+			query timeLines($first: Int, $after: String) {
+				timeLines(first: $first, after: $after) {
+					edges {
+						timeLine {
+							id
 						}
-						hasMoreData
+						cursor
 					}
+					hasMoreData
 				}
+			}
 			`,
 			Variables: `
 			{
 				"first": 4,
-				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -828,27 +988,27 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwNTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031005000000000"
+							"id": "1509030983000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4NTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031008000000000"
+							"id": "1509030985000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAxMTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4NzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031011000000000"
+							"id": "1509030987000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAxNDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4OTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031014000000000"
+							"id": "1509030989000000000"
 						}
 					}
 					],
@@ -859,22 +1019,22 @@ func TestTimeLines(t *testing.T) {
 		},
 		{
 			Query: `
-				query timeLines($last: Int, $before: String) {
-					timeLines(last: $last, before: $before) {
-						edges {
-							timeLine {
-								id
-							}
-							cursor
+			query timeLines($last: Int, $before: String) {
+				timeLines(last: $last, before: $before) {
+					edges {
+						timeLine {
+							id
 						}
-						hasMoreData
+						cursor
 					}
+					hasMoreData
 				}
+			}
 			`,
 			Variables: `
 			{
 				"last": 4,
-				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAwMjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -882,15 +1042,15 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5OTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509030999000000000"
+							"id": "1509030981000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk5NjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMDk4MDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiIiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509030996000000000"
+							"id": "1509030980000000000"
 						}
 					},
 					{
@@ -909,17 +1069,17 @@ func TestTimeLines(t *testing.T) {
 	RunTests(t, initBasic, []*Test{
 		{
 			Query: `
-				query timeLines($first: Int, $aggregateType: String) {
-					timeLines(first: $first, aggregateType: $aggregateType) {
-						edges {
-							timeLine {
-								id
-							}
-							cursor
+			query timeLines($first: Int, $aggregateType: String) {
+				timeLines(first: $first, aggregateType: $aggregateType) {
+					edges {
+						timeLine {
+							id
 						}
-						hasMoreData
+						cursor
 					}
+					hasMoreData
 				}
+			}
 			`,
 			Variables: `
 			{
@@ -938,21 +1098,21 @@ func TestTimeLines(t *testing.T) {
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031026000000000"
+							"id": "1509031070000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031027000000000"
+							"id": "1509031071000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031028000000000"
+							"id": "1509031072000000000"
 						}
 					}
 					],
@@ -963,22 +1123,22 @@ func TestTimeLines(t *testing.T) {
 		},
 		{
 			Query: `
-				query timeLines($first: Int, $after: String) {
-					timeLines(first: $first, after: $after) {
-						edges {
-							timeLine {
-								id
-							}
-							cursor
+			query timeLines($first: Int, $after: String) {
+				timeLines(first: $first, after: $after) {
+					edges {
+						timeLine {
+							id
 						}
-						hasMoreData
+						cursor
 					}
+					hasMoreData
 				}
+			}
 			`,
 			Variables: `
 			{
 				"first": 4,
-				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"after": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -986,27 +1146,27 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyOTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031029000000000"
+							"id": "1509031073000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAzMDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3NDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031030000000000"
+							"id": "1509031074000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3NTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031051000000000"
+							"id": "1509031075000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA1MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3NjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031052000000000"
+							"id": "1509031076000000000"
 						}
 					}
 					],
@@ -1017,22 +1177,22 @@ func TestTimeLines(t *testing.T) {
 		},
 		{
 			Query: `
-				query timeLines($last: Int, $before: String) {
-					timeLines(last: $last, before: $before) {
-						edges {
-							timeLine {
-								id
-							}
-							cursor
+			query timeLines($last: Int, $before: String) {
+				timeLines(last: $last, before: $before) {
+					edges {
+						timeLine {
+							id
 						}
-						hasMoreData
+						cursor
 					}
+					hasMoreData
 				}
+			}
 			`,
 			Variables: `
 			{
 				"last": 4,
-				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyODAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
+				"before": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0="
 			}
 			`,
 			ExpectedResult: `
@@ -1040,15 +1200,15 @@ func TestTimeLines(t *testing.T) {
 				"timeLines": {
 					"edges": [
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNzAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MTAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031027000000000"
+							"id": "1509031071000000000"
 						}
 					},
 					{
-						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTAyNjAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
+						"cursor": "eyJUaW1lTGluZUlEIjoiMTUwOTAzMTA3MDAwMDAwMDAwMCIsIkFnZ3JlZ2F0ZVR5cGUiOiJyb2xlc3RyZWUiLCJBZ2dyZWdhdGVJRCI6bnVsbH0=",
 						"timeLine": {
-							"id": "1509031026000000000"
+							"id": "1509031070000000000"
 						}
 					},
 					{
@@ -1757,9 +1917,11 @@ func TestCircleDeleteChildRole(t *testing.T) {
 				}
 			}
 			`,
+			// The delete role tension handler may execute before this, so check
+			// 2 timelines before
 			Variables: `
 			{
-				"timeLineID": "-1"
+				"timeLineID": "-2"
 			}
 			`,
 			ExpectedResult: `
@@ -1866,7 +2028,7 @@ func TestCircleDeleteChildRole(t *testing.T) {
 			`,
 			Variables: `
 			{
-				"timeLineID": "-1"
+				"timeLineID": "-2"
 			}
 			`,
 			ExpectedResult: `
@@ -2188,9 +2350,11 @@ func TestCircleUpdateChildRole(t *testing.T) {
 				}
 			}
 			`,
+			// The delete role tension handler may execute before this, so check
+			// 2 timelines before
 			Variables: `
 				{
-					"timeLineID": "-1",
+					"timeLineID": "-2",
 					"uid": "66c0cc1f-f608-53dc-88b5-f3afd68a4d6c"
 				}
 			`,
@@ -2352,9 +2516,11 @@ func TestCircleUpdateChildRole(t *testing.T) {
 				}
 			}
 			`,
+			// The delete role tension handler may execute before this, so check
+			// 2 timelines before
 			Variables: `
 			{
-				"timeLineID": "-1"
+				"timeLineID": "-2"
 			}
 			`,
 			ExpectedResult: `
@@ -2846,13 +3012,17 @@ func TestCircleMember(t *testing.T) {
 
 func TestConcurrentChangeRolesTree(t *testing.T) {
 	runTests(t, initBasic, []*Test{
+		// This test is flaky since sometimes the first test commits the
+		// rolestree events before the second has loaded its state and so they
+		// correctly applies changes without concurrency errors. So run it
+		// anyway but if the results check fails skip it.
 		{
 			Query: `
-				mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
-					roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
-						hasErrors
-					}
+			mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
+				roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
+					hasErrors
 				}
+			}
 			`,
 			Variables: `
 			{
@@ -2871,11 +3041,11 @@ func TestConcurrentChangeRolesTree(t *testing.T) {
 		},
 		{
 			Query: `
-				mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
-					roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
-						hasErrors
-					}
+			mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
+				roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
+					hasErrors
 				}
+			}
 			`,
 			Variables: `
 			{
@@ -2891,9 +3061,9 @@ func TestConcurrentChangeRolesTree(t *testing.T) {
 				}
 			}
 			`,
-			Error: fmt.Errorf(`graphql: failed to execute query: pq: duplicate key value violates unique constraint "event_category_streamid_version_key"`),
+			Error: fmt.Errorf("graphql: current version 189 different than provided version 186"),
 		},
-	}, true)
+	}, true, true)
 }
 
 func TestConcurrentChangeRolesTreeCreateMember(t *testing.T) {
@@ -2939,9 +3109,77 @@ func TestConcurrentChangeRolesTreeCreateMember(t *testing.T) {
 				}
 			}
 			`,
-			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+			ExpectedResult: `
+			{
+				"createMember": {
+					"hasErrors": false
+				}
+			}
+			`,
 		},
-	}, true)
+	}, true, false)
+}
+
+func TestCreateMember(t *testing.T) {
+	RunTests(t, initBasic, []*Test{
+		{
+			Query: `
+			mutation CreateMember($createMemberChange: CreateMemberChange!) {
+				createMember(createMemberChange: $createMemberChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"createMemberChange": {
+					"userName": "newuser01",
+					"fullName": "newuser01",
+					"email": "newuser01@example.com",
+					"password": "password"
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"createMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+	})
+}
+
+func TestCreateMemberExistingEmail(t *testing.T) {
+	RunTests(t, initBasic, []*Test{
+		{
+			Query: `
+			mutation CreateMember($createMemberChange: CreateMemberChange!) {
+				createMember(createMemberChange: $createMemberChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"createMemberChange": {
+					"userName": "newuser01",
+					"fullName": "newuser01",
+					"email": "user01@example.com",
+					"password": "password"
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"createMember": {
+					"hasErrors": true
+				}
+			}
+			`,
+		},
+	})
 }
 
 func TestConcurrentCreateMemberSameUsername(t *testing.T) {
@@ -2974,87 +3212,36 @@ func TestConcurrentCreateMemberSameUsername(t *testing.T) {
 		},
 		{
 			Query: `
-				mutation CreateMember($createMemberChange: CreateMemberChange!) {
-					createMember(createMemberChange: $createMemberChange) {
-						hasErrors
-					}
+			mutation CreateMember($createMemberChange: CreateMemberChange!) {
+				createMember(createMemberChange: $createMemberChange) {
+					hasErrors
 				}
-				`,
+			}
+			`,
 			Variables: `
-				{
-					"createMemberChange": {
-						"userName": "newuser01",
-						"fullName": "newuser01",
-						"email": "anothernewuser01@example.com",
-						"password": "password"
-					}
+			{
+				"createMemberChange": {
+					"userName": "newuser01",
+					"fullName": "newuser01",
+					"email": "anothernewuser01@example.com",
+					"password": "password"
 				}
-				`,
-			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+			}
+			`,
+			Error: fmt.Errorf(`graphql: username "newuser01" already reserved`),
 		},
-	}, true)
+	}, true, false)
 }
 
 func TestConcurrentCreateMemberSameEmail(t *testing.T) {
 	runTests(t, initBasic, []*Test{
 		{
 			Query: `
-				mutation CreateMember($createMemberChange: CreateMemberChange!) {
-					createMember(createMemberChange: $createMemberChange) {
-						hasErrors
-					}
+			mutation CreateMember($createMemberChange: CreateMemberChange!) {
+				createMember(createMemberChange: $createMemberChange) {
+					hasErrors
 				}
-				`,
-			Variables: `
-				{
-					"createMemberChange": {
-						"userName": "newuser01",
-						"fullName": "newuser01",
-						"email": "newuser01@example.com",
-						"password": "password"
-					}
-				}
-				`,
-			ExpectedResult: `
-				{
-					"createMember": {
-						"hasErrors": false
-					}
-				}
-				`,
-		},
-		{
-			Query: `
-				mutation CreateMember($createMemberChange: CreateMemberChange!) {
-					createMember(createMemberChange: $createMemberChange) {
-						hasErrors
-					}
-				}
-				`,
-			Variables: `
-				{
-					"createMemberChange": {
-						"userName": "newuser02",
-						"fullName": "newuser02",
-						"email": "newuser01@example.com",
-						"password": "password"
-					}
-				}
-			`,
-			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
-		},
-	}, true)
-}
-
-func TestConcurrentCreateMemberSameMatchUID(t *testing.T) {
-	runTests(t, initBasic, []*Test{
-		{
-			Query: `
-				mutation CreateMember($createMemberChange: CreateMemberChange!) {
-					createMember(createMemberChange: $createMemberChange) {
-						hasErrors
-					}
-				}
+			}
 			`,
 			Variables: `
 			{
@@ -3062,7 +3249,6 @@ func TestConcurrentCreateMemberSameMatchUID(t *testing.T) {
 					"userName": "newuser01",
 					"fullName": "newuser01",
 					"email": "newuser01@example.com",
-					"matchUID": "newuser01",
 					"password": "password"
 				}
 			}
@@ -3088,13 +3274,345 @@ func TestConcurrentCreateMemberSameMatchUID(t *testing.T) {
 				"createMemberChange": {
 					"userName": "newuser02",
 					"fullName": "newuser02",
-					"email": "newuser02@example.com",
-					"matchUID": "newuser01",
+					"email": "newuser01@example.com",
 					"password": "password"
 				}
 			}
 			`,
-			Error: fmt.Errorf("graphql: failed to execute query: pq: could not serialize access due to read/write dependencies among transactions"),
+			Error: fmt.Errorf(`graphql: email "newuser01@example.com" already reserved`),
 		},
-	}, true)
+	}, true, false)
+}
+
+func TestUnsetDeletedCircleFromTension(t *testing.T) {
+	RunTests(t, initBasic, []*Test{
+		// Add member admin to role rootRole-circle01-role01
+		{
+			Query: `
+			mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
+				roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"roleUID": "0f2af650-b98b-57f3-9dcb-bb8bd8bf6479",
+				"memberUID": "bace0701-15e3-5144-97c5-47487d543032",
+				"focus": "focus01"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"roleAddMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		// Create tension as member admin on circle rootRole-circle01
+		{
+			Query: `
+			mutation CreateTension($createTensionChange: CreateTensionChange!) {
+				createTension(createTensionChange: $createTensionChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"createTensionChange": {
+					"title": "newtension",
+					"description": "newtension",
+					"roleUID": "66c0cc1f-f608-53dc-88b5-f3afd68a4d6c"
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"createTension": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		// Check that the tension has been created with the right circle
+		// assigned
+		{
+			Query: `
+			query tensionViewerQuery {
+				viewer {
+					member {
+						tensions {
+							uid
+							title
+							role {
+								uid
+								name
+							}
+							closed
+						}
+					}
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"viewer": {
+					"member": {
+						"tensions": [
+						{
+							"closed": false,
+							"role": {
+								"name": "rootRole-circle01",
+								"uid": "LUJMgnvykhzsX6Edb656JL"
+							},
+							"title": "newtension",
+							"uid": "YiAJCY5FDuKXisdSfcDgQY"
+						}
+						]
+					}
+				}
+			}
+			`,
+		},
+		// Delete rootRole-circle01
+		{
+			Query: `
+			mutation CircleDeleteChildRole($roleUID: ID!, $deleteRoleChange: DeleteRoleChange!) {
+				circleDeleteChildRole(roleUID: $roleUID, deleteRoleChange: $deleteRoleChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"roleUID": "FDi26qza4rFLLTLdbqzpsd",
+				"deleteRoleChange": {
+					"uid": "66c0cc1f-f608-53dc-88b5-f3afd68a4d6c"
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"circleDeleteChildRole": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		// Check that the tension has been changed unsetting the circle since it
+		// had been deleted
+		{
+			// Wait for the deletedRoleTensionHandler to alter the tension
+			StartSleep: 1 * time.Second,
+			Query: `
+			query tensionViewerQuery {
+				viewer {
+					member {
+						tensions {
+							uid
+							title
+							role {
+								uid
+								name
+							}
+							closed
+						}
+					}
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"viewer": {
+					"member": {
+						"tensions": [
+						{
+							"closed": false,
+							"role": null,
+							"title": "newtension",
+							"uid": "YiAJCY5FDuKXisdSfcDgQY"
+						}
+						]
+					}
+				}
+			}
+			`,
+		},
+	})
+}
+
+func TestUnsetCircleChangedToNormalRoleFromTension(t *testing.T) {
+	RunTests(t, initBasic, []*Test{
+		// Add member admin to role rootRole-circle01-role01
+		{
+			Query: `
+			mutation RoleAddMember($roleUID: ID!, $memberUID: ID!) {
+				roleAddMember(roleUID: $roleUID, memberUID: $memberUID, focus: $focus) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"roleUID": "0f2af650-b98b-57f3-9dcb-bb8bd8bf6479",
+				"memberUID": "bace0701-15e3-5144-97c5-47487d543032",
+				"focus": "focus01"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"roleAddMember": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		// Create tension as member admin on circle rootRole-circle01
+		{
+			Query: `
+			mutation CreateTension($createTensionChange: CreateTensionChange!) {
+				createTension(createTensionChange: $createTensionChange) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"createTensionChange": {
+					"title": "newtension",
+					"description": "newtension",
+					"roleUID": "66c0cc1f-f608-53dc-88b5-f3afd68a4d6c"
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"createTension": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		// Check that the tension has been created with the right circle
+		// assigned
+		{
+			Query: `
+			query tensionViewerQuery {
+				viewer {
+					member {
+						tensions {
+							uid
+							title
+							role {
+								uid
+								name
+							}
+							closed
+						}
+					}
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"viewer": {
+					"member": {
+						"tensions": [
+						{
+							"closed": false,
+							"role": {
+								"name": "rootRole-circle01",
+								"uid": "LUJMgnvykhzsX6Edb656JL"
+							},
+							"title": "newtension",
+							"uid": "YiAJCY5FDuKXisdSfcDgQY"
+						}
+						]
+					}
+				}
+			}
+			`,
+		},
+		// Make rootRole-circle01 a normal role
+		{
+			Query: `
+			mutation CircleUpdateChildRole($roleUID: ID!, $updateRoleChange: UpdateRoleChange!) {
+				circleUpdateChildRole(roleUID: $roleUID, updateRoleChange: $updateRoleChange) {
+					hasErrors
+					role {
+						roleType
+						uid
+						name
+						roles {
+							name
+						}
+					}
+				}
+			}
+			`,
+			Variables: `
+			{
+				"roleUID": "FDi26qza4rFLLTLdbqzpsd",
+				"updateRoleChange": {
+					"uid": "66c0cc1f-f608-53dc-88b5-f3afd68a4d6c",
+					"makeRole": true
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"circleUpdateChildRole": {
+					"hasErrors": false,
+					"role": {
+						"name": "rootRole-circle01",
+						"roleType": "normal",
+						"uid": "LUJMgnvykhzsX6Edb656JL",
+						"roles": []
+					}
+				}
+			}
+			`,
+		},
+		// Check that the tension has been changed unsetting the circle since it
+		// had been changed to a normal role
+		{
+			// Wait for the deletedRoleTensionHandler to alter the tension
+			StartSleep: 1 * time.Second,
+			Query: `
+			query tensionViewerQuery {
+				viewer {
+					member {
+						tensions {
+							uid
+							title
+							role {
+								uid
+								name
+							}
+							closed
+						}
+					}
+				}
+			}
+			`,
+			ExpectedResult: `
+			{
+				"viewer": {
+					"member": {
+						"tensions": [
+						{
+							"closed": false,
+							"role": null,
+							"title": "newtension",
+							"uid": "YiAJCY5FDuKXisdSfcDgQY"
+						}
+						]
+					}
+				}
+			}
+			`,
+		},
+	})
 }

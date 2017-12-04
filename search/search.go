@@ -24,11 +24,12 @@ var log = slog.S()
 
 type SearchEngine struct {
 	db *db.DB
+	es *eventstore.EventStore
 
 	index bleve.Index
 }
 
-func NewSearchEngine(db *db.DB, indexPath string) *SearchEngine {
+func NewSearchEngine(db *db.DB, es *eventstore.EventStore, indexPath string) *SearchEngine {
 	mapping := buildIndexMapping()
 
 	index, err := createOpenIndex(indexPath, mapping)
@@ -38,6 +39,7 @@ func NewSearchEngine(db *db.DB, indexPath string) *SearchEngine {
 
 	s := &SearchEngine{
 		db:    db,
+		es:    es,
 		index: index,
 	}
 
@@ -105,15 +107,6 @@ func createOpenIndex(path string, mapping mapping.IndexMapping) (bleve.Index, er
 }
 
 func (s *SearchEngine) eventsPoller() {
-	tx, err := s.db.NewTx()
-	if err != nil {
-		log.Errorf("cannot create db transaction: %+v", err)
-		return
-	}
-	defer tx.Rollback()
-
-	es := eventstore.NewEventStore(tx)
-
 	eventSeqNumberBytes, err := s.index.GetInternal([]byte("lasteventseqnumber"))
 	if err != nil {
 		log.Errorf("cannot get last event sequence number: %+v", err)
@@ -128,7 +121,7 @@ func (s *SearchEngine) eventsPoller() {
 	ctx := context.Background()
 	// if empty index, index the current state and start from the last sequence number
 	if eventSeqNumber == 0 {
-		eventSeqNumber, err = es.LastSequenceNumber()
+		eventSeqNumber, err = s.es.LastSequenceNumber()
 		if err != nil {
 			log.Errorf("err: %+v", err)
 			return
@@ -138,7 +131,7 @@ func (s *SearchEngine) eventsPoller() {
 	}
 
 	for {
-		events, err := es.GetAllEvents(eventSeqNumber+1, 100)
+		events, err := s.es.GetAllEvents(eventSeqNumber+1, 100)
 		if err != nil {
 			log.Errorf("cannot get events: %+v", err)
 			return
@@ -324,8 +317,17 @@ func (s *SearchEngine) HandlEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeMemberAvatarSet:
 
-	default:
-		return errors.Errorf("unhandled event: %s", event.EventType)
+	case eventstore.EventTypeMemberChangeCreateRequested:
+	case eventstore.EventTypeMemberChangeUpdateRequested:
+	case eventstore.EventTypeMemberChangeSetMatchUIDRequested:
+	case eventstore.EventTypeMemberChangeCompleted:
+
+	case eventstore.EventTypeMemberRequestHandlerStateUpdated:
+
+	case eventstore.EventTypeMemberRequestSagaCompleted:
+
+	case eventstore.EventTypeUniqueRegistryValueReserved:
+	case eventstore.EventTypeUniqueRegistryValueReleased:
 	}
 
 	ctx := context.Background()

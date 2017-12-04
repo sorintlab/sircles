@@ -12,6 +12,8 @@ import (
 	"github.com/sorintlab/sircles/command"
 	"github.com/sorintlab/sircles/config"
 	"github.com/sorintlab/sircles/db"
+	"github.com/sorintlab/sircles/eventstore"
+	ln "github.com/sorintlab/sircles/listennotify"
 	"github.com/sorintlab/sircles/readdb"
 	"github.com/sorintlab/sircles/util"
 
@@ -63,16 +65,22 @@ func generateToken(sd *TokenSigningData, userid string) (string, error) {
 
 type loginHandler struct {
 	config           *config.Config
-	db               *db.DB
+	dataDir          string
+	readDB           *db.DB
+	es               *eventstore.EventStore
+	lnf              ln.ListenerFactory
 	authenticator    auth.Authenticator
 	memberProvider   auth.MemberProvider
 	tokenSigningData *TokenSigningData
 }
 
-func NewLoginHandler(config *config.Config, db *db.DB, authenticator auth.Authenticator, memberProvider auth.MemberProvider, tokenSigningData *TokenSigningData) *loginHandler {
+func NewLoginHandler(config *config.Config, dataDir string, readDB *db.DB, es *eventstore.EventStore, lnf ln.ListenerFactory, authenticator auth.Authenticator, memberProvider auth.MemberProvider, tokenSigningData *TokenSigningData) *loginHandler {
 	return &loginHandler{
 		config:           config,
-		db:               db,
+		dataDir:          dataDir,
+		readDB:           readDB,
+		es:               es,
+		lnf:              lnf,
 		authenticator:    authenticator,
 		memberProvider:   memberProvider,
 		tokenSigningData: tokenSigningData,
@@ -121,24 +129,25 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := h.db.NewTx()
+	tx, err := h.readDB.NewTx()
 	if err != nil {
 		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
+	defer tx.Rollback()
+
 	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		log.Errorf("err: %+v", err)
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
-	commandService := command.NewCommandService(tx, readDBService, nil, nil, h.memberProvider != nil)
+	commandService := command.NewCommandService(h.dataDir, h.readDB, h.es, nil, h.lnf, h.memberProvider != nil)
 
 	// find a matching member using the matchUID reported by the authenticator
 	member, err := auth.FindMatchingMember(ctx, readDBService, matchUID)
 	if err != nil {
-		tx.Rollback()
 		log.Errorf("auth err: %+v", err)
 		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return
@@ -196,7 +205,6 @@ func (h *loginHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		member, err = auth.FindMatchingMember(ctx, readDBService, memberInfo.MatchUID)
 		if err != nil {
-			tx.Rollback()
 			log.Errorf("auth err: %+v", err)
 			http.Error(w, "authentication failed", http.StatusUnauthorized)
 			return
@@ -360,6 +368,8 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
+	defer tx.Commit()
+
 	readDBService, err := readdb.NewReadDBService(tx)
 	if err != nil {
 		log.Errorf("err: %+v", err)
@@ -381,14 +391,12 @@ func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	member, err := readDBService.Member(ctx, readDBService.CurTimeLine(ctx).Number(), util.NewFromUUID(userID))
 	if err != nil {
-		tx.Rollback()
 		log.Errorf("auth err: %+v", err)
 		// mask reported error
 		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return
 	}
 	if member == nil {
-		tx.Rollback()
 		log.Errorf("member with id %s doesn't exist", userID)
 		// mask reported error
 		http.Error(w, "authentication failed", http.StatusUnauthorized)

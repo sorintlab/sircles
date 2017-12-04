@@ -2,9 +2,12 @@ package eventstore
 
 import (
 	"database/sql"
+	"fmt"
+	"time"
 
 	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
+	ln "github.com/sorintlab/sircles/listennotify"
 	slog "github.com/sorintlab/sircles/log"
 	"github.com/sorintlab/sircles/util"
 
@@ -13,6 +16,15 @@ import (
 )
 
 var log = slog.S()
+
+type concurrentUpdateError struct {
+	providedVersion int64
+	currentVersion  int64
+}
+
+func (e *concurrentUpdateError) Error() string {
+	return fmt.Sprintf("current version %d different than provided version %d", e.currentVersion, e.providedVersion)
+}
 
 const (
 	eventStoreExclusiveLock = iota
@@ -29,14 +41,16 @@ var (
 )
 
 type EventStore struct {
-	tx *db.Tx
+	db *db.DB
 	tg common.TimeGenerator
+	nf ln.NotifierFactory
 }
 
-func NewEventStore(tx *db.Tx) *EventStore {
+func NewEventStore(db *db.DB, nf ln.NotifierFactory) *EventStore {
 	return &EventStore{
-		tx: tx,
+		db: db,
 		tg: common.DefaultTimeGenerator{},
+		nf: nf,
 	}
 }
 
@@ -113,7 +127,6 @@ func (s *EventStore) insertStreamVersion(tx *db.Tx, av *StreamVersion) error {
 }
 
 func (s *EventStore) LastSequenceNumber() (int64, error) {
-
 	// Get last sequence
 	sb := eventSelect.OrderBy("sequencenumber DESC").Limit(1)
 
@@ -123,13 +136,15 @@ func (s *EventStore) LastSequenceNumber() (int64, error) {
 	}
 
 	var es []*StoredEvent
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		rows, err := tx.Query(q, args...)
-		if err != nil {
-			return errors.Wrap(err, "failed to execute query")
-		}
-		es, err = scanEvents(rows)
-		return err
+	err = s.db.Do(func(tx *db.Tx) error {
+		return tx.Do(func(tx *db.WrappedTx) error {
+			rows, err := tx.Query(q, args...)
+			if err != nil {
+				return errors.WithMessage(err, "failed to execute query")
+			}
+			es, err = scanEvents(rows)
+			return err
+		})
 	})
 	if err != nil {
 		return 0, err
@@ -146,6 +161,81 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 		return nil, nil
 	}
 
+	notifier := s.nf.NewNotifier()
+	hasTxNotifier := false
+	txNotifier, ok := notifier.(ln.TxNotifier)
+	if ok {
+		hasTxNotifier = true
+	}
+
+	// use the same timestamps for all these events since they represents the
+	// same transaction
+	// this also avoid races with the testTimeGenerator when a sqlite3
+	// transaction is retried leading to different timestamps
+	timestamp := s.tg.Now()
+
+	var storedEvents []*StoredEvent
+
+	err := s.db.Do(func(tx *db.Tx) error {
+		var err error
+		storedEvents, err = s.writeEvents(tx, timestamp, eventsData, category, streamID, version)
+		if err != nil {
+			return err
+		}
+
+		if hasTxNotifier {
+			txNotifier.BindTx(tx)
+			return txNotifier.Notify("event", "")
+		}
+		return nil
+	})
+	if err != nil {
+		// NOTE(sgotti) since the above transaction can return multiple
+		// concurrency errors types, instead of having a list of all of the
+		// possible concurrency error just refetch the current stream version
+		// in another transaction and if it's changed then we assume the above
+		// was a concurrency error. It's not perfect.
+		var curVersion int64
+		nerr := s.db.Do(func(tx *db.Tx) error {
+			if len(eventsData) == 0 {
+				return err
+			}
+
+			// get the stream version
+			return tx.Do(func(tx *db.WrappedTx) error {
+				sb := sb.Select("version").From("streamversion").Where(sq.Eq{"streamid": streamID})
+				q, args, err := sb.ToSql()
+				if err != nil {
+					return errors.Wrap(err, "failed to build query")
+				}
+				err = tx.QueryRow(q, args...).Scan(&curVersion)
+				if err != nil && err != sql.ErrNoRows {
+					return errors.WithMessage(err, "failed to execute query")
+				}
+				return nil
+			})
+		})
+		if nerr != nil {
+			// return the previous error
+			return nil, err
+		}
+		if version != curVersion {
+			return nil, errors.WithStack(&concurrentUpdateError{providedVersion: version, currentVersion: curVersion})
+		}
+
+		return nil, err
+	}
+
+	if !hasTxNotifier {
+		if err := notifier.Notify("event", ""); err != nil {
+			return nil, err
+		}
+	}
+
+	return storedEvents, nil
+}
+
+func (s *EventStore) writeEvents(tx *db.Tx, timestamp time.Time, eventsData []*EventData, category string, streamID string, version int64) ([]*StoredEvent, error) {
 	sb := sb.Select("category", "version").From("streamversion").Where(sq.Eq{"streamid": streamID})
 	q, args, err := sb.ToSql()
 	if err != nil {
@@ -154,7 +244,7 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 
 	var curVersion int64
 	var at string
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
+	err = tx.Do(func(tx *db.WrappedTx) error {
 		err := tx.QueryRow(q, args...).Scan(&at, &curVersion)
 		if err != nil && err != sql.ErrNoRows {
 			return errors.WithMessage(err, "failed to execute query")
@@ -177,7 +267,6 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 	prevVersion := version
 
 	// write the events
-
 	events := make([]*StoredEvent, len(eventsData))
 
 	for i, ed := range eventsData {
@@ -191,7 +280,7 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 			Data:      ed.Data,
 			MetaData:  ed.MetaData,
 
-			Timestamp: s.tg.Now(),
+			Timestamp: timestamp,
 			Version:   version,
 		}
 		events[i] = e
@@ -201,7 +290,7 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 	// In this way we'll commit ordered (but not gapless) sequence numbers and avoid
 	// races where a lower sequence number is committed after an higher one
 	// causing handlers relying to the sequence number to lose these events.
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
+	err = tx.Do(func(tx *db.WrappedTx) error {
 		_, err = tx.Exec("select pg_advisory_xact_lock($1)", eventStoreExclusiveLock)
 		return err
 	})
@@ -209,7 +298,7 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 		return nil, errors.Wrap(err, "failed to take exlusive lock")
 	}
 	for _, e := range events {
-		if err := s.insertEvent(s.tx, e); err != nil {
+		if err := s.insertEvent(tx, e); err != nil {
 			return nil, err
 		}
 	}
@@ -219,7 +308,7 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 		return nil, nil
 	}
 	log.Debugf("updating stream %s to version: %d", streamID, version)
-	if err := s.insertStreamVersion(s.tx, &StreamVersion{Category: category, StreamID: streamID, Version: version}); err != nil {
+	if err := s.insertStreamVersion(tx, &StreamVersion{Category: category, StreamID: streamID, Version: version}); err != nil {
 		return nil, err
 	}
 
@@ -227,11 +316,17 @@ func (s *EventStore) WriteEvents(eventsData []*EventData, category string, strea
 }
 
 func (s *EventStore) RestoreEvents(events []*StoredEvent) error {
+	return s.db.Do(func(tx *db.Tx) error {
+		return s.restoreEvents(tx, events)
+	})
+}
+
+func (s *EventStore) restoreEvents(tx *db.Tx, events []*StoredEvent) error {
 	versions := map[string]*StreamVersion{}
 
 	// Write the events
 	for _, e := range events {
-		if err := s.insertEvent(s.tx, e); err != nil {
+		if err := s.insertEvent(tx, e); err != nil {
 			return err
 		}
 
@@ -244,7 +339,7 @@ func (s *EventStore) RestoreEvents(events []*StoredEvent) error {
 
 	// Update the stream version
 	for _, av := range versions {
-		if err := s.insertStreamVersion(s.tx, av); err != nil {
+		if err := s.insertStreamVersion(tx, av); err != nil {
 			return err
 		}
 	}
@@ -261,13 +356,15 @@ func (s *EventStore) GetEvent(id *util.ID) (*StoredEvent, error) {
 	}
 
 	var events []*StoredEvent
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		rows, err := tx.Query(q, args...)
-		if err != nil {
-			return errors.Wrap(err, "failed to execute query")
-		}
-		events, err = scanEvents(rows)
-		return err
+	err = s.db.Do(func(tx *db.Tx) error {
+		return tx.Do(func(tx *db.WrappedTx) error {
+			rows, err := tx.Query(q, args...)
+			if err != nil {
+				return errors.Wrap(err, "failed to execute query")
+			}
+			events, err = scanEvents(rows)
+			return err
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -294,13 +391,15 @@ func (s *EventStore) GetAllEvents(start int64, count uint64) ([]*StoredEvent, er
 	}
 
 	var events []*StoredEvent
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		rows, err := tx.Query(q, args...)
-		if err != nil {
-			return errors.WithMessage(err, "failed to execute query")
-		}
-		events, err = scanEvents(rows)
-		return err
+	err = s.db.Do(func(tx *db.Tx) error {
+		return tx.Do(func(tx *db.WrappedTx) error {
+			rows, err := tx.Query(q, args...)
+			if err != nil {
+				return errors.WithMessage(err, "failed to execute query")
+			}
+			events, err = scanEvents(rows)
+			return err
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -321,13 +420,15 @@ func (s *EventStore) GetEventsByCategory(category string, start int64, count uin
 	}
 
 	var events []*StoredEvent
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		rows, err := tx.Query(q, args...)
-		if err != nil {
-			return errors.WithMessage(err, "failed to execute query")
-		}
-		events, err = scanEvents(rows)
-		return err
+	err = s.db.Do(func(tx *db.Tx) error {
+		return tx.Do(func(tx *db.WrappedTx) error {
+			rows, err := tx.Query(q, args...)
+			if err != nil {
+				return errors.WithMessage(err, "failed to execute query")
+			}
+			events, err = scanEvents(rows)
+			return err
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -348,13 +449,15 @@ func (s *EventStore) GetEvents(streamID string, startVersion int64, count uint64
 	}
 
 	var events []*StoredEvent
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		rows, err := tx.Query(q, args...)
-		if err != nil {
-			return errors.WithMessage(err, "failed to execute query")
-		}
-		events, err = scanEvents(rows)
-		return err
+	err = s.db.Do(func(tx *db.Tx) error {
+		return tx.Do(func(tx *db.WrappedTx) error {
+			rows, err := tx.Query(q, args...)
+			if err != nil {
+				return errors.WithMessage(err, "failed to execute query")
+			}
+			events, err = scanEvents(rows)
+			return err
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -371,13 +474,15 @@ func (s *EventStore) GetLastEvent(streamID string) (*StoredEvent, error) {
 	}
 
 	var events []*StoredEvent
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		rows, err := tx.Query(q, args...)
-		if err != nil {
-			return errors.WithMessage(err, "failed to execute query")
-		}
-		events, err = scanEvents(rows)
-		return err
+	err = s.db.Do(func(tx *db.Tx) error {
+		return tx.Do(func(tx *db.WrappedTx) error {
+			rows, err := tx.Query(q, args...)
+			if err != nil {
+				return errors.WithMessage(err, "failed to execute query")
+			}
+			events, err = scanEvents(rows)
+			return err
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -386,23 +491,4 @@ func (s *EventStore) GetLastEvent(streamID string) (*StoredEvent, error) {
 		return nil, nil
 	}
 	return events[0], nil
-}
-
-func (s *EventStore) StreamVersion(streamID string) (int64, error) {
-	sb := sb.Select("category", "version").From("streamversion").Where(sq.Eq{"streamID": streamID})
-	q, args, err := sb.ToSql()
-	if err != nil {
-		return 0, errors.Wrap(err, "failed to build query")
-	}
-
-	var curVersion int64
-	var at string
-	err = s.tx.Do(func(tx *db.WrappedTx) error {
-		err := tx.QueryRow(q, args...).Scan(&at, &curVersion)
-		if err != nil && err != sql.ErrNoRows {
-			return errors.WithMessage(err, "failed to execute query")
-		}
-		return nil
-	})
-	return curVersion, nil
 }

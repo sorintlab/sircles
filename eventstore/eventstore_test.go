@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sorintlab/sircles/db"
+	ln "github.com/sorintlab/sircles/listennotify"
 )
 
 func TestWriteEvents(t *testing.T) {
@@ -44,15 +45,13 @@ func TestWriteEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if err := db.Migrate(); err != nil {
+	if err := db.Migrate("eventstore", Migrations); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	tx, err := db.NewTx()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	es := NewEventStore(tx)
+	localln := ln.NewLocalListenNotify()
+	nf := ln.NewLocalNotifierFactory(localln)
+	es := NewEventStore(db, nf)
 
 	if _, err := es.WriteEvents(events, RolesTreeAggregate.String(), RolesTreeAggregateID.String(), 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -98,10 +97,6 @@ func TestWriteEvents(t *testing.T) {
 		if err.Error() != expectedErr.Error() {
 			t.Fatalf("expected error %q, got error %q", expectedErr, err)
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -151,15 +146,13 @@ func TestRestoreEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if err := db1.Migrate(); err != nil {
+	if err := db1.Migrate("eventstore", Migrations); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	tx, err := db1.NewTx()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	es := NewEventStore(tx)
+	localln := ln.NewLocalListenNotify()
+	nf := ln.NewLocalNotifierFactory(localln)
+	es := NewEventStore(db1, nf)
 
 	if _, err := es.WriteEvents(events1, RolesTreeAggregate.String(), "b1399c23-5b50-4c72-b803-804efaba0cb1", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -179,15 +172,13 @@ func TestRestoreEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if err := db2.Migrate(); err != nil {
+	if err := db2.Migrate("eventstore", Migrations); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	tx, err = db2.NewTx()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	es = NewEventStore(tx)
+	localln = ln.NewLocalListenNotify()
+	nf = ln.NewLocalNotifierFactory(localln)
+	es = NewEventStore(db2, nf)
 
 	if err := es.RestoreEvents(writtenEvents); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -202,9 +193,5 @@ func TestRestoreEvents(t *testing.T) {
 		if restoredEvents[i].Version != expectedVersion {
 			t.Fatalf("expected event version %d, got %d for event seq %d", expectedVersion, restoredEvents[i].Version, restoredEvents[i].SequenceNumber)
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		t.Fatalf("unexpected error: %v", err)
 	}
 }

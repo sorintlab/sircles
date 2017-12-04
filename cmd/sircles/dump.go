@@ -48,34 +48,37 @@ func dump(cmd *cobra.Command, args []string) error {
 		slog.SetLevel(zapcore.DebugLevel)
 	}
 
-	if c.DB.Type == "" {
-		return errors.New("no db type specified")
+	if c.EventStore.Type == "" {
+		return errors.New("no eventstore type specified")
 	}
-	switch c.DB.Type {
+	if c.EventStore.Type != "sql" {
+		return errors.Errorf("unknown eventstore type: %q", c.EventStore.Type)
+	}
+	if c.EventStore.DB.Type == "" {
+		return errors.New("no eventstore db type specified")
+	}
+
+	switch c.EventStore.DB.Type {
 	case db.Postgres:
-	case db.CockRoachDB:
 	case db.Sqlite3:
 	default:
-		return errors.Errorf("unsupported db type: %s", c.DB.Type)
+		return errors.Errorf("unsupported eventstore db type: %s", c.EventStore.DB.Type)
 	}
 
-	db, err := db.NewDB(c.DB.Type, c.DB.ConnString)
+	esLnType := getLNtype(&c.EventStore.DB)
+	_, esNf, err := getListenerNotifierFactories(esLnType, &c.EventStore.DB)
+
+	esDB, err := db.NewDB(c.EventStore.DB.Type, c.EventStore.DB.ConnString)
 	if err != nil {
 		return err
 	}
 
-	// Populate/migrate db
-	if err := db.Migrate(); err != nil {
+	// Populate/migrate esdb
+	if err := esDB.Migrate("eventstore", eventstore.Migrations); err != nil {
 		return err
 	}
 
-	tx, err := db.NewTx()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	es := eventstore.NewEventStore(tx)
+	es := eventstore.NewEventStore(esDB, esNf)
 
 	f, err := os.Create(dumpFile)
 	if err != nil {
@@ -83,7 +86,6 @@ func dump(cmd *cobra.Command, args []string) error {
 	}
 
 	i := int64(1)
-	lastSeqNumber := int64(1)
 	for {
 		events, err := es.GetAllEvents(i, 100)
 		if err != nil {
@@ -96,9 +98,6 @@ func dump(cmd *cobra.Command, args []string) error {
 
 		for _, event := range events {
 			log.Infof("sequencenumber: %d", event.SequenceNumber)
-			if event.SequenceNumber != lastSeqNumber {
-				panic(errors.Errorf("sequence number: %d != %d", event.SequenceNumber, lastSeqNumber))
-			}
 			eventj, err := json.Marshal(event)
 			if err != nil {
 				return errors.WithStack(err)
@@ -106,8 +105,6 @@ func dump(cmd *cobra.Command, args []string) error {
 			f.Write(eventj)
 			f.Write([]byte("\n"))
 			log.Infof("eventj: %s", eventj)
-
-			lastSeqNumber++
 		}
 	}
 	f.Close()

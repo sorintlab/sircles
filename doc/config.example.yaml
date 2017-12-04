@@ -27,15 +27,29 @@ web:
   #allowedOrigins:
   #  - '*'
 
-db:
-  # the database type (postgres or sqlite3), use postgres for production and
+readdb:
+  # the read database type (postgres or sqlite3), use postgres for production and
   # sqlite only for test
   type: 'postgres'
   # an example connection string to a postgres database instance on a sircles db
-  connString: 'postgres://user@db01/sircles?sslmode=disable'
-
+  connString: 'postgres://user@db01/sircles_readdb?sslmode=disable'
+  #
   #type: 'sqlite3'
   #connString: './sircles.db'
+
+eventStore:
+  # The eventstore type, currently only a sql based eventstore is supported
+  type: 'sql'
+  db:
+    # the eventstore sql database type (postgres or sqlite3), use postgres for
+    # production and sqlite only for test
+    type: 'postgres'
+    # an example connection string to a postgres database instance on a sircles db
+    connString: 'postgres://@localhost/sircles_es?sslmode=disable'
+    #
+    #type: 'sqlite3'
+    #connString: './sircles.db'
+
 
 ## index configuration
 index:
@@ -61,7 +75,7 @@ authentication:
 
 # type can be: local, ldap, oidc
   type: local
-    # the user should provided the email instead of the username for authentication
+    # the user should provide the email instead of the username for authentication
     #useEmail: true
 
 #  # example ldap configuration
