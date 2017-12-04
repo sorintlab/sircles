@@ -1430,9 +1430,9 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 		}
 	}
 
-	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, callingMemberID, commands.NewCommandCreateMember(c, passwordHash, avatar))
+	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, callingMemberID, commands.NewCommandCreateMember(c, util.NilID, passwordHash, avatar))
 
-	events = append(events, eventstore.NewEventMemberCreated(member))
+	events = append(events, eventstore.NewEventMemberCreated(member, util.NilID))
 
 	events = append(events, eventstore.NewEventMemberAvatarSet(member.ID, avatar))
 
@@ -1441,7 +1441,7 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 	}
 
 	if c.MatchUID != "" {
-		events = append(events, eventstore.NewEventMemberMatchUIDSet(member.ID, c.MatchUID))
+		events = append(events, eventstore.NewEventMemberMatchUIDSet(member.ID, util.NilID, c.MatchUID, ""))
 	}
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.MemberAggregate, member.ID.String(), version)
@@ -1584,6 +1584,9 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 		return res, util.NilID, ErrValidation
 	}
 
+	prevUserName := member.UserName
+	prevEmail := member.Email
+
 	// only an admin can make/remove another member as admin
 	if callingMember.IsAdmin {
 		member.IsAdmin = c.IsAdmin
@@ -1602,9 +1605,9 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	groupID := s.uidGenerator.UUID("")
 	events := []eventstore.Event{}
 
-	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateMember(c, avatar))
+	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateMember(c, util.NilID, avatar, prevUserName, prevEmail))
 
-	events = append(events, eventstore.NewEventMemberUpdated(member))
+	events = append(events, eventstore.NewEventMemberUpdated(member, util.NilID, prevUserName, prevEmail))
 
 	if avatar != nil {
 		events = append(events, eventstore.NewEventMemberAvatarSet(member.ID, avatar))
@@ -1675,7 +1678,7 @@ func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID
 		return nil, err
 	}
 
-	command := commands.NewCommand(commands.CommandTypeSetMemberPassword, correlationID, causationID, callingMember.ID, commands.SetMemberPassword{MemberID: memberID, PasswordHash: passwordHash})
+	command := commands.NewCommand(commands.CommandTypeSetMemberPassword, correlationID, causationID, callingMember.ID, commands.SetMemberPassword{PasswordHash: passwordHash})
 
 	events = append(events, eventstore.NewEventMemberPasswordSet(memberID, passwordHash))
 
@@ -1746,9 +1749,9 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 	events := []eventstore.Event{}
 
 	// NOTE(sgotti) Changing a password doesn't require a new timeline since there's no history of previous password, the command will have an empty timeline
-	command := commands.NewCommand(commands.CommandTypeSetMemberMatchUID, correlationID, causationID, callingMemberID, commands.SetMemberMatchUID{MemberID: memberID, MatchUID: matchUID})
+	command := commands.NewCommand(commands.CommandTypeSetMemberMatchUID, correlationID, causationID, callingMemberID, commands.SetMemberMatchUID{MatchUID: matchUID})
 
-	events = append(events, eventstore.NewEventMemberMatchUIDSet(memberID, matchUID))
+	events = append(events, eventstore.NewEventMemberMatchUIDSet(memberID, util.NilID, matchUID, ""))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.MemberAggregate, memberID.String(), version)
 	if err != nil {

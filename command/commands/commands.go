@@ -27,6 +27,12 @@ const (
 
 	CommandTypeSetRoleAdditionalContent CommandType = "SetRoleAdditionalContent"
 
+	CommandTypeCompleteRequest CommandType = "CompleteRequest"
+
+	CommandTypeRequestCreateMember      CommandType = "RequestCreateMember"
+	CommandTypeRequestUpdateMember      CommandType = "RequestUpdateMember"
+	CommandTypeRequestSetMemberMatchUID CommandType = "RequestSetMemberMatchUID"
+
 	CommandTypeCreateMember      CommandType = "CreateMember"
 	CommandTypeUpdateMember      CommandType = "UpdateMember"
 	CommandTypeDeleteMember      CommandType = "DeleteMember"
@@ -50,6 +56,9 @@ const (
 	CommandTypeRoleAddMember    CommandType = "RoleAddMember"
 	CommandTypeRoleUpdateMember CommandType = "RoleUpdateMember"
 	CommandTypeRoleRemoveMember CommandType = "RoleRemoveMember"
+
+	CommandTypeReserveValue CommandType = "ReserveValue"
+	CommandTypeReleaseValue CommandType = "ReleaseValue"
 )
 
 type Command struct {
@@ -103,7 +112,13 @@ type SetRoleAdditionalContent struct {
 	Content string
 }
 
-type CreateMember struct {
+type CompleteRequest struct {
+	Error  bool
+	Reason string
+}
+
+type RequestCreateMember struct {
+	MemberID     util.ID
 	IsAdmin      bool
 	MatchUID     string
 	UserName     string
@@ -113,8 +128,9 @@ type CreateMember struct {
 	Avatar       []byte
 }
 
-func NewCommandCreateMember(c *change.CreateMemberChange, passwordHash string, avatar []byte) *CreateMember {
-	return &CreateMember{
+func NewCommandRequestCreateMember(c *change.CreateMemberChange, memberID util.ID, passwordHash string, avatar []byte) *RequestCreateMember {
+	return &RequestCreateMember{
+		MemberID:     memberID,
 		IsAdmin:      c.IsAdmin,
 		MatchUID:     c.MatchUID,
 		UserName:     c.UserName,
@@ -125,33 +141,90 @@ func NewCommandCreateMember(c *change.CreateMemberChange, passwordHash string, a
 	}
 }
 
-type UpdateMember struct {
-	ID       util.ID
-	IsAdmin  bool
-	UserName string
-	FullName string
-	Email    string
-	Avatar   []byte
+type CreateMember struct {
+	IsAdmin        bool
+	MatchUID       string
+	UserName       string
+	FullName       string
+	Email          string
+	PasswordHash   string
+	Avatar         []byte
+	MemberChangeID util.ID
 }
 
-func NewCommandUpdateMember(c *change.UpdateMemberChange, avatar []byte) *UpdateMember {
+func NewCommandCreateMember(c *change.CreateMemberChange, memberChangeID util.ID, passwordHash string, avatar []byte) *CreateMember {
+	return &CreateMember{
+		IsAdmin:        c.IsAdmin,
+		MatchUID:       c.MatchUID,
+		UserName:       c.UserName,
+		FullName:       c.FullName,
+		Email:          c.Email,
+		PasswordHash:   passwordHash,
+		Avatar:         avatar,
+		MemberChangeID: memberChangeID,
+	}
+}
+
+type RequestUpdateMember struct {
+	MemberID     util.ID
+	IsAdmin      bool
+	UserName     string
+	FullName     string
+	Email        string
+	Avatar       []byte
+	PrevUserName string
+	PrevEmail    string
+}
+
+func NewCommandRequestUpdateMember(c *change.UpdateMemberChange, memberID util.ID, avatar []byte, prevUserName, prevEmail string) *RequestUpdateMember {
+	return &RequestUpdateMember{
+		MemberID:     memberID,
+		IsAdmin:      c.IsAdmin,
+		UserName:     c.UserName,
+		FullName:     c.FullName,
+		Email:        c.Email,
+		Avatar:       avatar,
+		PrevUserName: prevUserName,
+		PrevEmail:    prevEmail,
+	}
+}
+
+type UpdateMember struct {
+	IsAdmin        bool
+	UserName       string
+	FullName       string
+	Email          string
+	Avatar         []byte
+	MemberChangeID util.ID
+	PrevUserName   string
+	PrevEmail      string
+}
+
+func NewCommandUpdateMember(c *change.UpdateMemberChange, memberChangeID util.ID, avatar []byte, prevUserName, prevEmail string) *UpdateMember {
 	return &UpdateMember{
-		IsAdmin:  c.IsAdmin,
-		UserName: c.UserName,
-		FullName: c.FullName,
-		Email:    c.Email,
-		Avatar:   avatar,
+		IsAdmin:        c.IsAdmin,
+		UserName:       c.UserName,
+		FullName:       c.FullName,
+		Email:          c.Email,
+		Avatar:         avatar,
+		MemberChangeID: memberChangeID,
+		PrevUserName:   prevUserName,
+		PrevEmail:      prevEmail,
 	}
 }
 
 type SetMemberPassword struct {
-	MemberID     util.ID
 	PasswordHash string
 }
 
-type SetMemberMatchUID struct {
+type RequestSetMemberMatchUID struct {
 	MemberID util.ID
 	MatchUID string
+}
+
+type SetMemberMatchUID struct {
+	MatchUID       string
+	MemberChangeID util.ID
 }
 
 type CreateTension struct {
@@ -254,4 +327,16 @@ type RoleUpdateMember struct {
 type RoleRemoveMember struct {
 	RoleID   util.ID
 	MemberID util.ID
+}
+
+type ReserveValue struct {
+	Value     string
+	ID        util.ID
+	RequestID util.ID
+}
+
+type ReleaseValue struct {
+	Value     string
+	ID        util.ID
+	RequestID util.ID
 }
