@@ -1241,7 +1241,7 @@ func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID ut
 
 	command := commands.NewCommand(commands.CommandTypeSetRoleAdditionalContent, correlationID, causationID, callingMember.ID, commands.SetRoleAdditionalContent{RoleID: roleID, Content: content})
 
-	events = append(events, eventstore.NewEventRoleAdditionalContentSet(roleID, roleAdditionalContent))
+	events = append(events, eventstore.NewEventRoleAdditionalContentSet(roleID, roleAdditionalContent.Content))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.RolesTreeAggregate, eventstore.RolesTreeAggregateID.String(), version)
 	if err != nil {
@@ -1430,7 +1430,7 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 		}
 	}
 
-	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, callingMemberID, commands.NewCommandCreateMember(c, passwordHash))
+	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, callingMemberID, commands.NewCommandCreateMember(c, passwordHash, avatar))
 
 	events = append(events, eventstore.NewEventMemberCreated(member))
 
@@ -1602,7 +1602,7 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	groupID := s.uidGenerator.UUID("")
 	events := []eventstore.Event{}
 
-	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateMember(c))
+	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, callingMember.ID, commands.NewCommandUpdateMember(c, avatar))
 
 	events = append(events, eventstore.NewEventMemberUpdated(member))
 
@@ -1841,7 +1841,8 @@ func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTens
 	groupID := s.uidGenerator.UUID("")
 	events := []eventstore.Event{}
 
-	command := commands.NewCommand(commands.CommandTypeCreateTension, correlationID, causationID, callingMember.ID, commands.NewCommandCreateTension(c))
+	command := commands.NewCommand(commands.CommandTypeCreateTension, correlationID, causationID, callingMember.ID, commands.NewCommandCreateTension(callingMember.ID, c))
+
 	events = append(events, eventstore.NewEventTensionCreated(tension, callingMember.ID, c.RoleID))
 
 	wevents, err := s.writeEvents(events, command, groupID, eventstore.TensionAggregate, tension.ID.String(), version)

@@ -33,9 +33,10 @@ const (
 	CommandTypeSetMemberPassword CommandType = "SetMemberPassword"
 	CommandTypeSetMemberMatchUID CommandType = "SetMemberMatchUID"
 
-	CommandTypeCreateTension CommandType = "CreateTension"
-	CommandTypeUpdateTension CommandType = "UpdateTension"
-	CommandTypeCloseTension  CommandType = "CloseTension"
+	CommandTypeCreateTension     CommandType = "CreateTension"
+	CommandTypeUpdateTension     CommandType = "UpdateTension"
+	CommandTypeChangeTensionRole CommandType = "ChangeTensionRole"
+	CommandTypeCloseTension      CommandType = "CloseTension"
 
 	CommandTypeCircleAddDirectMember    CommandType = "CircleAddDirectMember"
 	CommandTypeCircleRemoveDirectMember CommandType = "CircleRemoveDirectMember"
@@ -73,6 +74,8 @@ func NewCommand(commandType CommandType, correlationID, causationID, issuerID ut
 }
 
 type SetupRootRole struct {
+	RootRoleID util.ID
+	Name       string
 }
 
 type UpdateRootRole struct {
@@ -81,6 +84,7 @@ type UpdateRootRole struct {
 
 type CircleCreateChildRole struct {
 	RoleID           util.ID
+	NewRoleID        util.ID
 	CreateRoleChange change.CreateRoleChange
 }
 
@@ -106,10 +110,10 @@ type CreateMember struct {
 	FullName     string
 	Email        string
 	PasswordHash string
-	AvatarData   *change.AvatarData
+	Avatar       []byte
 }
 
-func NewCommandCreateMember(c *change.CreateMemberChange, passwordHash string) *CreateMember {
+func NewCommandCreateMember(c *change.CreateMemberChange, passwordHash string, avatar []byte) *CreateMember {
 	return &CreateMember{
 		IsAdmin:      c.IsAdmin,
 		MatchUID:     c.MatchUID,
@@ -117,28 +121,26 @@ func NewCommandCreateMember(c *change.CreateMemberChange, passwordHash string) *
 		FullName:     c.FullName,
 		Email:        c.Email,
 		PasswordHash: passwordHash,
-		AvatarData:   c.AvatarData,
+		Avatar:       avatar,
 	}
 }
 
 type UpdateMember struct {
-	ID         util.ID
-	IsAdmin    bool
-	MatchUID   string
-	UserName   string
-	FullName   string
-	Email      string
-	AvatarData *change.AvatarData
+	ID       util.ID
+	IsAdmin  bool
+	UserName string
+	FullName string
+	Email    string
+	Avatar   []byte
 }
 
-func NewCommandUpdateMember(c *change.UpdateMemberChange) *UpdateMember {
+func NewCommandUpdateMember(c *change.UpdateMemberChange, avatar []byte) *UpdateMember {
 	return &UpdateMember{
-		IsAdmin:    c.IsAdmin,
-		MatchUID:   c.MatchUID,
-		UserName:   c.UserName,
-		FullName:   c.FullName,
-		Email:      c.Email,
-		AvatarData: c.AvatarData,
+		IsAdmin:  c.IsAdmin,
+		UserName: c.UserName,
+		FullName: c.FullName,
+		Email:    c.Email,
+		Avatar:   avatar,
 	}
 }
 
@@ -155,19 +157,20 @@ type SetMemberMatchUID struct {
 type CreateTension struct {
 	Title       string
 	Description string
+	MemberID    util.ID
 	RoleID      *util.ID
 }
 
-func NewCommandCreateTension(c *change.CreateTensionChange) *CreateTension {
+func NewCommandCreateTension(memberID util.ID, c *change.CreateTensionChange) *CreateTension {
 	return &CreateTension{
 		Title:       c.Title,
 		Description: c.Description,
+		MemberID:    memberID,
 		RoleID:      c.RoleID,
 	}
 }
 
 type UpdateTension struct {
-	ID          util.ID
 	Title       string
 	Description string
 	RoleID      *util.ID
@@ -175,21 +178,30 @@ type UpdateTension struct {
 
 func NewCommandUpdateTension(c *change.UpdateTensionChange) *UpdateTension {
 	return &UpdateTension{
-		ID:          c.ID,
 		Title:       c.Title,
 		Description: c.Description,
 		RoleID:      c.RoleID,
 	}
 }
 
+type ChangeTensionRole struct {
+	RoleID         *util.ID
+	TensionVersion int64
+}
+
+func NewCommandChangeTensionRole(roleID *util.ID, tensionVersion int64) *ChangeTensionRole {
+	return &ChangeTensionRole{
+		RoleID:         roleID,
+		TensionVersion: tensionVersion,
+	}
+}
+
 type CloseTension struct {
-	ID     util.ID
 	Reason string
 }
 
 func NewCommandCloseTension(c *change.CloseTensionChange) *CloseTension {
 	return &CloseTension{
-		ID:     c.ID,
 		Reason: c.Reason,
 	}
 }
@@ -223,7 +235,6 @@ type CircleSetCoreRoleMember struct {
 type CircleUnsetCoreRoleMember struct {
 	RoleType models.RoleType
 	RoleID   util.ID
-	MemberID util.ID
 }
 
 type RoleAddMember struct {

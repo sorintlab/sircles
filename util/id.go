@@ -23,6 +23,11 @@ func IDFromString(us string) (ID, error) {
 	return ID{UUID: u}, nil
 }
 
+func IDFromStringOrNil(us string) ID {
+	u := uuid.FromStringOrNil(us)
+	return ID{UUID: u}
+}
+
 type IDs []ID
 
 func (p IDs) Len() int           { return len(p) }

@@ -434,10 +434,10 @@ type EventRoleAdditionalContentSet struct {
 	Content string
 }
 
-func NewEventRoleAdditionalContentSet(roleID util.ID, roleAdditionalContent *models.RoleAdditionalContent) *EventRoleAdditionalContentSet {
+func NewEventRoleAdditionalContentSet(roleID util.ID, content string) *EventRoleAdditionalContentSet {
 	return &EventRoleAdditionalContentSet{
 		RoleID:  roleID,
-		Content: roleAdditionalContent.Content,
+		Content: content,
 	}
 }
 
