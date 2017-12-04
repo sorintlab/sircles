@@ -28,9 +28,10 @@ func Parse(configFile string) (*Config, error) {
 type Config struct {
 	Debug bool `json:"debug"`
 
-	Web   Web   `json:"web"`
-	DB    DB    `json:"db"`
-	Index Index `json:"index"`
+	Web        Web        `json:"web"`
+	ReadDB     DB         `json:"readdb"`
+	EventStore EventStore `json:"eventStore"`
+	Index      Index      `json:"index"`
 
 	TokenSigning TokenSigning `json:"tokenSigning"`
 
@@ -81,6 +82,11 @@ type Web struct {
 type DB struct {
 	Type       db.Type `json:"type"`
 	ConnString string  `json:"connString"`
+}
+
+type EventStore struct {
+	Type string `json:"type"`
+	DB   DB     `json:"db"`
 }
 
 type Index struct {

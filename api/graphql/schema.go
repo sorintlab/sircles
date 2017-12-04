@@ -10,7 +10,9 @@ import (
 	"github.com/sorintlab/sircles/auth"
 	"github.com/sorintlab/sircles/change"
 	"github.com/sorintlab/sircles/command"
+	"github.com/sorintlab/sircles/config"
 	"github.com/sorintlab/sircles/dataloader"
+	"github.com/sorintlab/sircles/db"
 	slog "github.com/sorintlab/sircles/log"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/readdb"
@@ -1299,7 +1301,10 @@ func NewResolver() *Resolver {
 func (r *Resolver) TimeLine(ctx context.Context, args *struct {
 	ID *util.TimeLineNumber
 }) (*timeLineResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var tl *util.TimeLine
 	timeLineID, err := getTimeLineNumber(ctx, s, args.ID)
@@ -1330,8 +1335,6 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 	After         *string
 	Before        *string
 }) (*timeLineConnectionResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
-
 	// accept only an After or a Before cursor
 	if args.After != nil && args.Before != nil {
 		return nil, errors.New("only one cursor can be provided")
@@ -1413,6 +1416,11 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 		timeLineID = util.TimeLineNumber(fromID)
 	}
 
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	timeLines, hasMoreData, err := s.TimeLines(ctx, fromTime, timeLineID, limit, args.Last == nil, aggregateType, aggregateID)
 	if err != nil {
 		return nil, err
@@ -1422,12 +1430,14 @@ func (r *Resolver) TimeLines(ctx context.Context, args *struct {
 }
 
 func (r *Resolver) Viewer(ctx context.Context) (*viewerResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 	timeLineID, err := getTimeLineNumber(ctx, s, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	member, err := s.CallingMember(ctx, timeLineID)
 	if err != nil {
 		return nil, err
@@ -1439,7 +1449,10 @@ func (r *Resolver) Viewer(ctx context.Context) (*viewerResolver, error) {
 }
 
 func (r *Resolver) RootRole(ctx context.Context, args *struct{ TimeLineID *util.TimeLineNumber }) (*roleResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 	timeLineID, err := getTimeLineNumber(ctx, s, args.TimeLineID)
 	if err != nil {
 		return nil, err
@@ -1458,7 +1471,10 @@ func (r *Resolver) Role(ctx context.Context, args *struct {
 	TimeLineID *util.TimeLineNumber
 	UID        graphql.ID
 }) (*roleResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 	timeLineID, err := getTimeLineNumber(ctx, s, args.TimeLineID)
 	if err != nil {
 		return nil, err
@@ -1482,7 +1498,10 @@ func (r *Resolver) Member(ctx context.Context, args *struct {
 	TimeLineID *util.TimeLineNumber
 	UID        graphql.ID
 }) (*memberResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 	timeLineID, err := getTimeLineNumber(ctx, s, args.TimeLineID)
 	if err != nil {
 		return nil, err
@@ -1506,7 +1525,10 @@ func (r *Resolver) Tension(ctx context.Context, args *struct {
 	TimeLineID *util.TimeLineNumber
 	UID        graphql.ID
 }) (*tensionResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 	timeLineID, err := getTimeLineNumber(ctx, s, args.TimeLineID)
 	if err != nil {
 		return nil, err
@@ -1532,7 +1554,10 @@ func (r *Resolver) Members(ctx context.Context, args *struct {
 	First      *float64
 	After      *string
 }) (*memberConnectionResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	// accept only a cursor or a timeline + search
 	if args.After != nil && (args.Search != nil || args.TimeLineID != nil) {
@@ -1575,7 +1600,10 @@ func (r *Resolver) Members(ctx context.Context, args *struct {
 }
 
 func (r *Resolver) Roles(ctx context.Context, args *struct{ TimeLineID *util.TimeLineNumber }) (*[]*roleResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 	timeLineID, err := getTimeLineNumber(ctx, s, args.TimeLineID)
 	if err != nil {
 		return nil, err
@@ -1595,7 +1623,7 @@ func (r *Resolver) Roles(ctx context.Context, args *struct{ TimeLineID *util.Tim
 func (r *Resolver) UpdateRootRole(ctx context.Context, args *struct {
 	UpdateRootRoleChange *UpdateRootRoleChange
 }) (*updateRootRoleResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	urc, err := args.UpdateRootRoleChange.toCommandChange()
 	if err != nil {
@@ -1606,27 +1634,39 @@ func (r *Resolver) UpdateRootRole(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &updateRootRoleResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
 	var role *models.Role
 	if err == nil {
-		role, err = s.Role(ctx, tl.Number(), urc.ID)
+		role, err = readdb.Role(ctx, tl.Number(), urc.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateRootRoleResultResolver{s, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateRootRoleResultResolver{readdb, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) CircleCreateChildRole(ctx context.Context, args *struct {
 	RoleUID          graphql.ID
 	CreateRoleChange *CreateRoleChange
 }) (*createRoleResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	crc, err := args.CreateRoleChange.toCommandChange()
 	if err != nil {
@@ -1642,27 +1682,39 @@ func (r *Resolver) CircleCreateChildRole(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &createRoleResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
 	var role *models.Role
 	if err == nil && res.RoleID != nil {
-		role, err = s.Role(ctx, tl.Number(), *res.RoleID)
+		role, err = readdb.Role(ctx, tl.Number(), *res.RoleID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &createRoleResultResolver{s, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	return &createRoleResultResolver{readdb, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) CircleUpdateChildRole(ctx context.Context, args *struct {
 	RoleUID          graphql.ID
 	UpdateRoleChange *UpdateRoleChange
 }) (*updateRoleResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	urc, err := args.UpdateRoleChange.toCommandChange()
 	if err != nil {
@@ -1678,27 +1730,39 @@ func (r *Resolver) CircleUpdateChildRole(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &updateRoleResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
 	var role *models.Role
 	if err == nil {
-		role, err = s.Role(ctx, tl.Number(), urc.ID)
+		role, err = readdb.Role(ctx, tl.Number(), urc.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateRoleResultResolver{s, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateRoleResultResolver{readdb, role, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) CircleDeleteChildRole(ctx context.Context, args *struct {
 	RoleUID          graphql.ID
 	DeleteRoleChange *DeleteRoleChange
 }) (*deleteRoleResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	drc, err := args.DeleteRoleChange.toCommandChange()
 	if err != nil {
@@ -1714,20 +1778,32 @@ func (r *Resolver) CircleDeleteChildRole(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &deleteRoleResultResolver{nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &deleteRoleResultResolver{s, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &deleteRoleResultResolver{readdb, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) SetRoleAdditionalContent(ctx context.Context, args *struct {
 	RoleUID graphql.ID
 	Content string
 }) (*setRoleAdditionalContentResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 
 	roleID, err := unmarshalUID(args.RoleUID)
@@ -1739,13 +1815,25 @@ func (r *Resolver) SetRoleAdditionalContent(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &setRoleAdditionalContentResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	dataLoaders := dataloader.NewDataLoaders(ctx, s)
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	dataLoaders := dataloader.NewDataLoaders(ctx, readdb)
 	data, err := dataLoaders.Get(tl.Number()).RoleAdditionalContent.Load(roleID.String())()
 	if err != nil {
 		return nil, err
@@ -1754,13 +1842,13 @@ func (r *Resolver) SetRoleAdditionalContent(ctx context.Context, args *struct {
 	if err != nil {
 		return nil, err
 	}
-	return &setRoleAdditionalContentResultResolver{s, roleAdditionalContent, res, tl.Number(), dataLoaders}, nil
+	return &setRoleAdditionalContentResultResolver{readdb, roleAdditionalContent, res, tl.Number(), dataLoaders}, nil
 }
 
 func (r *Resolver) CreateMember(ctx context.Context, args *struct {
 	CreateMemberChange *CreateMemberChange
 }) (*createMemberResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	avatar := ctx.Value("image")
 
@@ -1777,26 +1865,38 @@ func (r *Resolver) CreateMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &createMemberResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
 	var member *models.Member
 	if err == nil && res.MemberID != nil {
-		member, err = s.Member(ctx, tl.Number(), *res.MemberID)
+		member, err = readdb.Member(ctx, tl.Number(), *res.MemberID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &createMemberResultResolver{s, member, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	return &createMemberResultResolver{readdb, member, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) UpdateMember(ctx context.Context, args *struct {
 	UpdateMemberChange *UpdateMemberChange
 }) (*updateMemberResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	avatar := ctx.Value("image")
 
@@ -1813,20 +1913,32 @@ func (r *Resolver) UpdateMember(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &updateMemberResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
 	var member *models.Member
 	if err == nil {
-		member, err = s.Member(ctx, tl.Number(), mr.ID)
+		member, err = readdb.Member(ctx, tl.Number(), mr.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateMemberResultResolver{s, member, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateMemberResultResolver{readdb, member, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) SetMemberPassword(ctx context.Context, args *struct {
@@ -1834,6 +1946,7 @@ func (r *Resolver) SetMemberPassword(ctx context.Context, args *struct {
 	CurPassword *string
 	NewPassword string
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 
 	memberID, err := unmarshalUID(args.MemberUID)
@@ -1845,10 +1958,17 @@ func (r *Resolver) SetMemberPassword(ctx context.Context, args *struct {
 		curPassword = *args.CurPassword
 	}
 
-	res, err := cs.SetMemberPassword(ctx, memberID, curPassword, args.NewPassword)
+	res, groupID, err := cs.SetMemberPassword(ctx, memberID, curPassword, args.NewPassword)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
@@ -1856,6 +1976,7 @@ func (r *Resolver) SetMemberMatchUID(ctx context.Context, args *struct {
 	MemberUID graphql.ID
 	MatchUID  string
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 
 	memberID, err := unmarshalUID(args.MemberUID)
@@ -1863,19 +1984,31 @@ func (r *Resolver) SetMemberMatchUID(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	res, err := cs.SetMemberMatchUID(ctx, memberID, args.MatchUID)
+	res, groupID, err := cs.SetMemberMatchUID(ctx, memberID, args.MatchUID)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) ImportMember(ctx context.Context, args *struct {
 	LoginName string
 }) (*memberResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	memberProvider := ctx.Value("memberprovider").(auth.MemberProvider)
+
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	sn := util.TimeLineNumber(0)
 	timeLineID, err := getTimeLineNumber(ctx, s, &sn)
@@ -1883,9 +2016,31 @@ func (r *Resolver) ImportMember(ctx context.Context, args *struct {
 		return nil, err
 	}
 
-	member, err := auth.ImportMember(ctx, s, cs, memberProvider, args.LoginName)
+	res, groupID, err := auth.ImportMember(ctx, s, cs, memberProvider, args.LoginName)
 	if err != nil {
 		return nil, err
+	}
+
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	var member *models.Member
+	if err == nil && res.MemberID != nil {
+		member, err = readdb.Member(ctx, tl.Number(), *res.MemberID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &memberResolver{s, member, timeLineID, dataloader.NewDataLoaders(ctx, s)}, nil
 }
@@ -1893,7 +2048,7 @@ func (r *Resolver) ImportMember(ctx context.Context, args *struct {
 func (r *Resolver) CreateTension(ctx context.Context, args *struct {
 	CreateTensionChange *CreateTensionChange
 }) (*createTensionResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	mr, err := args.CreateTensionChange.toCommandChange()
 	if err != nil {
@@ -1904,26 +2059,38 @@ func (r *Resolver) CreateTension(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &createTensionResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
 	var tension *models.Tension
 	if err == nil && res.TensionID != nil {
-		tension, err = s.Tension(ctx, tl.Number(), *res.TensionID)
+		tension, err = readdb.Tension(ctx, tl.Number(), *res.TensionID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &createTensionResultResolver{s, tension, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	return &createTensionResultResolver{readdb, tension, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) UpdateTension(ctx context.Context, args *struct {
 	UpdateTensionChange *UpdateTensionChange
 }) (*updateTensionResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	mr, err := args.UpdateTensionChange.toCommandChange()
 	if err != nil {
@@ -1934,26 +2101,38 @@ func (r *Resolver) UpdateTension(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &updateTensionResultResolver{nil, nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
 
 	var tension *models.Tension
 	if err == nil {
-		tension, err = s.Tension(ctx, tl.Number(), mr.ID)
+		tension, err = readdb.Tension(ctx, tl.Number(), mr.ID)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &updateTensionResultResolver{s, tension, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	return &updateTensionResultResolver{readdb, tension, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) CloseTension(ctx context.Context, args *struct {
 	CloseTensionChange *CloseTensionChange
 }) (*closeTensionResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	mr, err := args.CloseTensionChange.toCommandChange()
 	if err != nil {
@@ -1964,19 +2143,32 @@ func (r *Resolver) CloseTension(ctx context.Context, args *struct {
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+	if err == command.ErrValidation {
+		return &closeTensionResultResolver{nil, res, -1, nil}, nil
+	}
 
-	tl, err := s.TimeLineForGroupID(ctx, groupID)
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+		return nil, err
+	}
+
+	readdb, err := r.setupReadDB(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &closeTensionResultResolver{s, res, tl.Number(), dataloader.NewDataLoaders(ctx, s)}, nil
+	tl, err := readdb.TimeLineForGroupID(ctx, groupID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &closeTensionResultResolver{readdb, res, tl.Number(), dataloader.NewDataLoaders(ctx, readdb)}, nil
 }
 
 func (r *Resolver) CircleSetLeadLinkMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -1986,25 +2178,40 @@ func (r *Resolver) CircleSetLeadLinkMember(ctx context.Context, args *struct {
 	if err != nil {
 		return nil, err
 	}
-	res, _, err := cs.CircleSetLeadLinkMember(ctx, roleUID, memberUID)
+	res, groupID, err := cs.CircleSetLeadLinkMember(ctx, roleUID, memberUID)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) CircleUnsetLeadLinkMember(ctx context.Context, args *struct {
 	RoleUID graphql.ID
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
 		return nil, err
 	}
-	res, _, err := cs.CircleUnsetLeadLinkMember(ctx, roleUID)
+	res, groupID, err := cs.CircleUnsetLeadLinkMember(ctx, roleUID)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
@@ -2014,6 +2221,7 @@ func (r *Resolver) CircleSetCoreRoleMember(ctx context.Context, args *struct {
 	MemberUID          graphql.ID
 	ElectionExpiration *graphql.Time
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -2027,10 +2235,17 @@ func (r *Resolver) CircleSetCoreRoleMember(ctx context.Context, args *struct {
 	if args.ElectionExpiration != nil {
 		time = &args.ElectionExpiration.Time
 	}
-	res, _, err := cs.CircleSetCoreRoleMember(ctx, models.RoleTypeFromString(args.RoleType), roleUID, memberUID, time)
+	res, groupID, err := cs.CircleSetCoreRoleMember(ctx, models.RoleTypeFromString(args.RoleType), roleUID, memberUID, time)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
@@ -2038,15 +2253,23 @@ func (r *Resolver) CircleUnsetCoreRoleMember(ctx context.Context, args *struct {
 	RoleType string
 	RoleUID  graphql.ID
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
 		return nil, err
 	}
-	res, _, err := cs.CircleUnsetCoreRoleMember(ctx, models.RoleTypeFromString(args.RoleType), roleUID)
+	res, groupID, err := cs.CircleUnsetCoreRoleMember(ctx, models.RoleTypeFromString(args.RoleType), roleUID)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
@@ -2054,6 +2277,7 @@ func (r *Resolver) CircleAddDirectMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -2063,10 +2287,17 @@ func (r *Resolver) CircleAddDirectMember(ctx context.Context, args *struct {
 	if err != nil {
 		return nil, err
 	}
-	res, _, err := cs.CircleAddDirectMember(ctx, roleUID, memberUID)
+	res, groupID, err := cs.CircleAddDirectMember(ctx, roleUID, memberUID)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
@@ -2074,6 +2305,7 @@ func (r *Resolver) CircleRemoveDirectMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -2083,10 +2315,17 @@ func (r *Resolver) CircleRemoveDirectMember(ctx context.Context, args *struct {
 	if err != nil {
 		return nil, err
 	}
-	res, _, err := cs.CircleRemoveDirectMember(ctx, roleUID, memberUID)
+	res, groupID, err := cs.CircleRemoveDirectMember(ctx, roleUID, memberUID)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
@@ -2096,6 +2335,7 @@ func (r *Resolver) RoleAddMember(ctx context.Context, args *struct {
 	Focus        *string
 	NoCoreMember bool
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -2105,10 +2345,17 @@ func (r *Resolver) RoleAddMember(ctx context.Context, args *struct {
 	if err != nil {
 		return nil, err
 	}
-	res, _, err := cs.RoleAddMember(ctx, roleUID, memberUID, args.Focus, args.NoCoreMember)
+	res, groupID, err := cs.RoleAddMember(ctx, roleUID, memberUID, args.Focus, args.NoCoreMember)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
@@ -2116,6 +2363,7 @@ func (r *Resolver) RoleRemoveMember(ctx context.Context, args *struct {
 	RoleUID   graphql.ID
 	MemberUID graphql.ID
 }) (*genericResultResolver, error) {
+	readDBListener := ctx.Value("readdblistener").(readdb.ReadDBListener)
 	cs := ctx.Value("commandservice").(*command.CommandService)
 	roleUID, err := unmarshalUID(args.RoleUID)
 	if err != nil {
@@ -2125,18 +2373,29 @@ func (r *Resolver) RoleRemoveMember(ctx context.Context, args *struct {
 	if err != nil {
 		return nil, err
 	}
-	res, _, err := cs.RoleRemoveMember(ctx, roleUID, memberUID)
+	res, groupID, err := cs.RoleRemoveMember(ctx, roleUID, memberUID)
 	if err != nil && err != command.ErrValidation {
 		return nil, err
 	}
+
+	if err != command.ErrValidation {
+		if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
+			return nil, err
+		}
+	}
+
 	return &genericResultResolver{res}, nil
 }
 
 func (r *Resolver) Search(ctx context.Context, args *struct {
 	Query string
 }) (*searchResultResolver, error) {
-	s := ctx.Value("service").(readdb.ReadDBService)
 	se := ctx.Value("searchEngine").(*search.SearchEngine)
+
+	s, err := r.setupReadDB(ctx)
+	if err != nil {
+		return nil, err
+	}
 	res, err := se.Search(args.Query)
 	if err != nil {
 		return nil, err
@@ -2154,4 +2413,22 @@ func (r *genericResultResolver) HasErrors() bool {
 
 func (r *genericResultResolver) GenericError() *string {
 	return errorToStringP(r.res.GenericError)
+}
+
+func (r *Resolver) setupReadDB(ctx context.Context) (readdb.ReadDBService, error) {
+	utx := ctx.Value("utx").(*db.Tx)
+	config := ctx.Value("config").(*config.Config)
+	if err := utx.Start(); err != nil {
+		return nil, err
+	}
+
+	s, err := readdb.NewReadDBService(utx)
+	if err != nil {
+		return nil, err
+	}
+
+	if config != nil && config.AdminMember != "" {
+		s.SetForceAdminMemberUserName(config.AdminMember)
+	}
+	return s, nil
 }

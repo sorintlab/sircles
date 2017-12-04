@@ -11,12 +11,12 @@ import (
 
 	"github.com/sorintlab/sircles/db"
 	"github.com/sorintlab/sircles/eventstore"
+	ln "github.com/sorintlab/sircles/listennotify"
 	slog "github.com/sorintlab/sircles/log"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
 
 	sq "github.com/Masterminds/squirrel"
-	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 	"github.com/satori/go.uuid"
 )
@@ -26,6 +26,10 @@ var log = slog.S()
 const (
 	MaxFetchSize = 25
 )
+
+type ReadDBListener interface {
+	WaitTimeLineForGroupID(ctx context.Context, groupID util.ID) (*util.TimeLine, error)
+}
 
 type ReadDBService interface {
 	// Queries
@@ -73,8 +77,6 @@ type ReadDBService interface {
 	MemberCirclePermissions(ctx context.Context, tl util.TimeLineNumber, roleID util.ID) (*models.MemberCirclePermissions, error)
 
 	RoleEvents(ctx context.Context, roleID util.ID, first int, start, after util.TimeLineNumber) ([]*models.RoleEvent, bool, error)
-
-	ApplyEvents(events []*eventstore.StoredEvent) error
 }
 
 type GenericSqlizer string
@@ -1353,7 +1355,7 @@ func (s *readDBService) CurTimeLine(ctx context.Context) *util.TimeLine {
 	// take a copy of curTl
 	c := *s.curTl
 
-	//log.Infof("curTl: %s", c)
+	//log.Debugf("curTl: %s", c)
 	return &c
 }
 
@@ -2287,7 +2289,7 @@ func (s *readDBService) CallingMember(ctx context.Context, curTl util.TimeLineNu
 		return nil, err
 	}
 	if member == nil {
-		return nil, errors.Errorf("unexistent member")
+		return nil, errors.Errorf("unexistent member with id: %s", userid)
 	}
 
 	// Set member as admin if defined as forcedAdminMemberUserName
@@ -2404,23 +2406,107 @@ func (s *readDBService) MemberCirclePermissions(ctx context.Context, tl util.Tim
 	return cp, nil
 }
 
-func (s *readDBService) ApplyEvents(events []*eventstore.StoredEvent) error {
-	for _, event := range events {
-		if err := s.ApplyEvent(event); err != nil {
-			return err
-		}
+type DBEventHandler struct {
+	db *db.DB
+	es *eventstore.EventStore
+	nf ln.NotifierFactory
+}
+
+func NewDBEventHandler(db *db.DB, es *eventstore.EventStore, nf ln.NotifierFactory) *DBEventHandler {
+	return &DBEventHandler{
+		db: db,
+		es: es,
+		nf: nf,
 	}
-	ctx := context.Background()
-	curTl := s.CurTimeLine(ctx)
-	if err := s.CheckBrokenEdges(curTl.Number()); err != nil {
+}
+
+func (h *DBEventHandler) Name() string {
+	return "readdb"
+}
+
+func (h *DBEventHandler) HandleEvents() error {
+	var sn int64
+	err := h.db.Do(func(tx *db.Tx) error {
+		err := tx.Do(func(tx *db.WrappedTx) error {
+			return tx.QueryRow("select sequencenumber from sequencenumber order by sequencenumber desc limit 1").Scan(&sn)
+		})
+		if err != nil {
+			if err == sql.ErrNoRows {
+				sn = 0
+			} else {
+				return err
+			}
+		}
+		return nil
+
+	})
+	if err != nil {
 		return err
 	}
+
+	notifier := h.nf.NewNotifier()
+	hasTxNotifier := false
+	txNotifier, ok := notifier.(ln.TxNotifier)
+	if ok {
+		hasTxNotifier = true
+	}
+
+	for {
+		events, err := h.es.GetAllEvents(sn+1, 100)
+		if err != nil {
+			return err
+		}
+
+		if len(events) == 0 {
+			return nil
+		}
+
+		err = h.db.Do(func(tx *db.Tx) error {
+			readDBService, err := NewReadDBService(tx)
+			if err != nil {
+				return err
+			}
+
+			for _, e := range events {
+				if err := h.handleEvent(e, tx, readDBService); err != nil {
+					return err
+				}
+
+				err = tx.Do(func(tx *db.WrappedTx) error {
+					if _, err := tx.Exec("insert into sequencenumber (sequencenumber) values ($1)", e.SequenceNumber); err != nil {
+						return errors.Wrap(err, "failed to save eventstate")
+					}
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+			}
+
+			if hasTxNotifier {
+				txNotifier.BindTx(tx)
+				return txNotifier.Notify("readdb", "")
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		if !hasTxNotifier {
+			if err := notifier.Notify("readdb", ""); err != nil {
+				return err
+			}
+		}
+
+		sn = events[len(events)-1].SequenceNumber
+	}
+
 	return nil
 }
 
-func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
-	//log.Infof("event: %#+v", event)
-	ctx := context.Background()
+func (h *DBEventHandler) handleEvent(event *eventstore.StoredEvent, tx *db.Tx, s *readDBService) error {
+	log.Debugf("event: %v", event)
 
 	metaData, err := event.UnmarshalMetaData()
 	if err != nil {
@@ -2431,17 +2517,19 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		return nil
 	}
 
+	ctx := context.Background()
+
 	tl, err := s.TimeLineForGroupID(ctx, *metaData.GroupID)
 	if err != nil {
 		return err
 	}
 	if tl == nil {
-		//log.Infof("no tl with groupID: %s", event.GroupID)
+		log.Debugf("no tl with groupID: %s", metaData.GroupID)
 		tl = &util.TimeLine{
 			Timestamp: event.Timestamp,
 		}
 
-		err := s.tx.Do(func(tx *db.WrappedTx) error {
+		err := tx.Do(func(tx *db.WrappedTx) error {
 			if _, err := tx.Exec("insert into timeline (timestamp, groupid, aggregatetype, aggregateid) values ($1, $2, $3, $4)", tl.Timestamp, metaData.GroupID.UUID, event.Category, event.StreamID); err != nil {
 				return errors.Wrap(err, "failed to insert timeline")
 			}
@@ -2458,13 +2546,10 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		}
 	}
 
-	s.curTlLock.Lock()
-	s.curTl, err = s.curTimeLineFromDB()
-	s.curTlLock.Unlock()
 	if err != nil {
 		return err
 	}
-	//log.Infof("tl:", tl)
+	log.Debugf("tl: %d", tl)
 
 	data, err := event.UnmarshalData()
 	if err != nil {
@@ -2792,8 +2877,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		if err != nil {
 			return err
 		}
-
-		err = s.tx.Do(func(tx *db.WrappedTx) error {
+		err = tx.Do(func(tx *db.WrappedTx) error {
 			if _, err := tx.Exec("delete from password where memberid = $1", memberID); err != nil {
 				return errors.Wrap(err, "failed to delete password")
 			}
@@ -2805,6 +2889,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		if err != nil {
 			return err
 		}
+
 	case eventstore.EventTypeMemberAvatarSet:
 		data := data.(*eventstore.EventMemberAvatarSet)
 		memberID, err := util.IDFromString(event.StreamID)
@@ -2818,6 +2903,18 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		if err := s.updateVertex(tl.Number(), vertexClassMemberAvatar, memberID, memberAvatar); err != nil {
 			return err
 		}
+
+	case eventstore.EventTypeMemberChangeCreateRequested:
+	case eventstore.EventTypeMemberChangeUpdateRequested:
+	case eventstore.EventTypeMemberChangeSetMatchUIDRequested:
+	case eventstore.EventTypeMemberChangeCompleted:
+
+	case eventstore.EventTypeMemberRequestHandlerStateUpdated:
+
+	case eventstore.EventTypeMemberRequestSagaCompleted:
+
+	case eventstore.EventTypeUniqueRegistryValueReserved:
+	case eventstore.EventTypeUniqueRegistryValueReleased:
 
 	default:
 		panic(errors.Errorf("unhandled event: %s", event.EventType))
@@ -3130,6 +3227,18 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 	case eventstore.EventTypeMemberAvatarSet:
 		//data := data.(*eventstore.EventMemberAvatarSet)
 
+	case eventstore.EventTypeMemberChangeCreateRequested:
+	case eventstore.EventTypeMemberChangeUpdateRequested:
+	case eventstore.EventTypeMemberChangeSetMatchUIDRequested:
+	case eventstore.EventTypeMemberChangeCompleted:
+
+	case eventstore.EventTypeMemberRequestHandlerStateUpdated:
+
+	case eventstore.EventTypeMemberRequestSagaCompleted:
+
+	case eventstore.EventTypeUniqueRegistryValueReserved:
+	case eventstore.EventTypeUniqueRegistryValueReleased:
+
 	default:
 		panic(errors.Errorf("unhandled event: %s", event.EventType))
 	}
@@ -3246,4 +3355,59 @@ func (s *readDBService) circleRemoveDirectMember(tl util.TimeLineNumber, roleID,
 		return err
 	}
 	return nil
+}
+
+type DBListener struct {
+	db  *db.DB
+	lnf ln.ListenerFactory
+}
+
+func NewDBListener(db *db.DB, lnf ln.ListenerFactory) *DBListener {
+	return &DBListener{db: db, lnf: lnf}
+}
+
+func (s *DBListener) WaitTimeLineForGroupID(ctx context.Context, groupID util.ID) (*util.TimeLine, error) {
+	l := s.lnf.NewListener()
+
+	if err := l.Listen("readdb"); err != nil {
+		return nil, err
+	}
+	defer l.Close()
+
+	for {
+		tl, err := s.timeLineForGroupID(ctx, groupID)
+		if err != nil {
+			return nil, err
+		}
+		if tl != nil {
+			return tl, nil
+		}
+		select {
+		case <-l.NotificationChannel():
+			continue
+
+		case <-time.After(1 * time.Second):
+			continue
+
+		case <-time.After(60 * time.Second):
+			return nil, errors.Errorf("timeout waiting for groupID: %s", groupID)
+
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+}
+
+func (s *DBListener) timeLineForGroupID(ctx context.Context, groupID util.ID) (*util.TimeLine, error) {
+	var tl *util.TimeLine
+	err := s.db.Do(func(tx *db.Tx) error {
+		var err error
+		readDBService, err := NewReadDBService(tx)
+		if err != nil {
+			return err
+		}
+		tl, err = readDBService.TimeLineForGroupID(ctx, groupID)
+		return err
+	})
+	return tl, err
 }

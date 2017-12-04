@@ -136,12 +136,12 @@ const (
 type EventType string
 
 const (
-	// RolesTree Root Aggregate
+	// RolesTree Aggregate
 	// If we want to have transactional consistency between the roles and the
 	// hierarchy (to achieve ui transactional commands like update role that
-	// want to both update a role data and move role from/to it) the simplest
-	// way is to make the hierarchy and all it's roles as a single aggregate
-	// root.
+	// want to transactionally update a role data and move role from/to it) the
+	// simplest way is to make the hierarchy and all its roles as a single
+	// aggregate.
 	EventTypeRoleCreated EventType = "RoleCreated"
 	EventTypeRoleUpdated EventType = "RoleUpdated"
 	EventTypeRoleDeleted EventType = "RoleDeleted"
