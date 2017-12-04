@@ -3,6 +3,7 @@ package aggregate
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/eventstore"
@@ -42,6 +43,10 @@ type Member struct {
 
 	created bool
 
+	createRequests      map[util.ID]struct{}
+	updateRequests      map[util.ID]struct{}
+	setMatchUIDRequests map[util.ID]struct{}
+
 	uidGenerator common.UIDGenerator
 }
 
@@ -49,6 +54,10 @@ func NewMember(uidGenerator common.UIDGenerator, id util.ID) *Member {
 	return &Member{
 		id:           id,
 		uidGenerator: uidGenerator,
+
+		createRequests:      make(map[util.ID]struct{}),
+		updateRequests:      make(map[util.ID]struct{}),
+		setMatchUIDRequests: make(map[util.ID]struct{}),
 	}
 }
 
@@ -87,12 +96,16 @@ func (m *Member) HandleCommand(command *commands.Command) ([]eventstore.Event, e
 func (m *Member) HandleCreateMemberCommand(command *commands.Command) ([]eventstore.Event, error) {
 	events := []eventstore.Event{}
 
-	// idempotency: if already created return no events
-	if m.created {
+	c := command.Data.(*commands.CreateMember)
+
+	if _, ok := m.createRequests[c.MemberChangeID]; ok {
 		return nil, nil
 	}
 
-	c := command.Data.(*commands.CreateMember)
+	// if already created return an error
+	if m.created {
+		return nil, fmt.Errorf("member already created")
+	}
 
 	member := &models.Member{
 		UserName: c.UserName,
@@ -102,7 +115,7 @@ func (m *Member) HandleCreateMemberCommand(command *commands.Command) ([]eventst
 	}
 	member.ID = m.id
 
-	events = append(events, eventstore.NewEventMemberCreated(member))
+	events = append(events, eventstore.NewEventMemberCreated(member, c.MemberChangeID))
 
 	if c.Avatar != nil {
 		events = append(events, eventstore.NewEventMemberAvatarSet(m.id, c.Avatar))
@@ -113,7 +126,7 @@ func (m *Member) HandleCreateMemberCommand(command *commands.Command) ([]eventst
 	}
 
 	if c.MatchUID != "" {
-		events = append(events, eventstore.NewEventMemberMatchUIDSet(m.id, c.MatchUID))
+		events = append(events, eventstore.NewEventMemberMatchUIDSet(m.id, c.MemberChangeID, c.MatchUID, ""))
 	}
 
 	return events, nil
@@ -122,12 +135,23 @@ func (m *Member) HandleCreateMemberCommand(command *commands.Command) ([]eventst
 func (m *Member) HandleUpdateMemberCommand(command *commands.Command) ([]eventstore.Event, error) {
 	events := []eventstore.Event{}
 
+	c := command.Data.(*commands.UpdateMember)
+
+	if _, ok := m.updateRequests[c.MemberChangeID]; ok {
+		return nil, nil
+	}
+
 	// if not created return an error
 	if !m.created {
 		return nil, fmt.Errorf("unexistent member")
 	}
 
-	c := command.Data.(*commands.UpdateMember)
+	if m.userName != c.PrevUserName {
+		return nil, errors.Errorf("consistency error: prevUserName: %q != userName: %q", c.PrevUserName, m.userName)
+	}
+	if m.email != c.PrevEmail {
+		return nil, errors.Errorf("consistency error: prevEmail: %q != email: %q", c.PrevEmail, m.email)
+	}
 
 	member := &models.Member{
 		UserName: c.UserName,
@@ -137,7 +161,7 @@ func (m *Member) HandleUpdateMemberCommand(command *commands.Command) ([]eventst
 	}
 	member.ID = m.id
 
-	events = append(events, eventstore.NewEventMemberUpdated(member))
+	events = append(events, eventstore.NewEventMemberUpdated(member, c.MemberChangeID, m.userName, m.email))
 
 	if c.Avatar != nil {
 		events = append(events, eventstore.NewEventMemberAvatarSet(m.id, c.Avatar))
@@ -161,7 +185,11 @@ func (m *Member) HandleSetMemberMatchUIDCommand(command *commands.Command) ([]ev
 
 	c := command.Data.(*commands.SetMemberMatchUID)
 
-	events = append(events, eventstore.NewEventMemberMatchUIDSet(m.id, c.MatchUID))
+	if _, ok := m.setMatchUIDRequests[c.MemberChangeID]; ok {
+		return nil, nil
+	}
+
+	events = append(events, eventstore.NewEventMemberMatchUIDSet(m.id, c.MemberChangeID, c.MatchUID, m.matchUID))
 
 	return events, nil
 }
@@ -190,10 +218,13 @@ func (m *Member) ApplyEvent(event *eventstore.StoredEvent) error {
 		data := data.(*eventstore.EventMemberCreated)
 
 		m.created = true
+
 		m.userName = data.UserName
 		m.fullName = data.FullName
 		m.email = data.Email
 		m.isAdmin = data.IsAdmin
+
+		m.createRequests[data.MemberChangeID] = struct{}{}
 
 	case eventstore.EventTypeMemberUpdated:
 		data := data.(*eventstore.EventMemberUpdated)
@@ -203,10 +234,14 @@ func (m *Member) ApplyEvent(event *eventstore.StoredEvent) error {
 		m.email = data.Email
 		m.isAdmin = data.IsAdmin
 
+		m.updateRequests[data.MemberChangeID] = struct{}{}
+
 	case eventstore.EventTypeMemberMatchUIDSet:
 		data := data.(*eventstore.EventMemberMatchUIDSet)
 
 		m.matchUID = data.MatchUID
+
+		m.setMatchUIDRequests[data.MemberChangeID] = struct{}{}
 	}
 
 	return nil

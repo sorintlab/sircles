@@ -17,22 +17,26 @@ func TestCreateMember(t *testing.T) {
 	correlationID := uidGenerator.UUID("")
 	causationID := uidGenerator.UUID("")
 
+	memberChangeID := uidGenerator.UUID("")
+
 	aggregate := NewMember(uidGenerator, memberID)
 
 	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, util.NilID, &commands.CreateMember{
-		IsAdmin:      false,
-		UserName:     "user01",
-		FullName:     "User 01",
-		Email:        "user01@example.com",
-		PasswordHash: "passwordHash",
+		IsAdmin:        false,
+		UserName:       "user01",
+		FullName:       "User 01",
+		Email:          "user01@example.com",
+		PasswordHash:   "passwordHash",
+		MemberChangeID: memberChangeID,
 	})
 
 	out := []eventstore.Event{
 		&eventstore.EventMemberCreated{
-			IsAdmin:  false,
-			UserName: "user01",
-			FullName: "User 01",
-			Email:    "user01@example.com",
+			IsAdmin:        false,
+			UserName:       "user01",
+			FullName:       "User 01",
+			Email:          "user01@example.com",
+			MemberChangeID: memberChangeID,
 		},
 		&eventstore.EventMemberPasswordSet{
 			PasswordHash: "passwordHash",
@@ -46,6 +50,39 @@ func TestCreateMember(t *testing.T) {
 	}
 
 	runTest(t, test)
+
+	// reexecute command using current state, should return no events since the
+	// memberChangeID has been already handled
+	storedEvents, err := toStoredEvents(out, aggregate.AggregateType(), aggregate.ID())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	test = &testData{
+		Aggregate: aggregate,
+		Command:   command,
+		State:     storedEvents,
+	}
+	runTest(t, test)
+
+	// Test create (using another memberChangeID) with already created member
+	memberChangeID = uidGenerator.UUID("")
+
+	command = commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, util.NilID, &commands.CreateMember{
+		IsAdmin:        false,
+		UserName:       "user01",
+		FullName:       "User 01",
+		Email:          "user01@example.com",
+		PasswordHash:   "passwordHash",
+		MemberChangeID: memberChangeID,
+	})
+	test = &testData{
+		Aggregate: aggregate,
+		Command:   command,
+		State:     storedEvents,
+		Err:       fmt.Errorf("member already created"),
+	}
+	runTest(t, test)
 }
 
 func setupMember(t *testing.T, memberID util.ID) []*eventstore.StoredEvent {
@@ -54,22 +91,26 @@ func setupMember(t *testing.T, memberID util.ID) []*eventstore.StoredEvent {
 	correlationID := uidGenerator.UUID("")
 	causationID := uidGenerator.UUID("")
 
+	memberChangeID := uidGenerator.UUID("")
+
 	aggregate := NewMember(uidGenerator, memberID)
 
 	command := commands.NewCommand(commands.CommandTypeCreateMember, correlationID, causationID, util.NilID, &commands.CreateMember{
-		IsAdmin:      false,
-		UserName:     "user01",
-		FullName:     "User 01",
-		Email:        "user01@example.com",
-		PasswordHash: "passwordHash",
+		IsAdmin:        false,
+		UserName:       "user01",
+		FullName:       "User 01",
+		Email:          "user01@example.com",
+		PasswordHash:   "passwordHash",
+		MemberChangeID: memberChangeID,
 	})
 
 	out := []eventstore.Event{
 		&eventstore.EventMemberCreated{
-			IsAdmin:  false,
-			UserName: "user01",
-			FullName: "User 01",
-			Email:    "user01@example.com",
+			IsAdmin:        false,
+			UserName:       "user01",
+			FullName:       "User 01",
+			Email:          "user01@example.com",
+			MemberChangeID: memberChangeID,
 		},
 		&eventstore.EventMemberPasswordSet{
 			PasswordHash: "passwordHash",
@@ -98,21 +139,29 @@ func TestUpdateMember(t *testing.T) {
 	correlationID := uidGenerator.UUID("")
 	causationID := uidGenerator.UUID("")
 
+	memberChangeID := uidGenerator.UUID("")
+
 	aggregate := NewMember(uidGenerator, memberID)
 
 	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, util.NilID, &commands.UpdateMember{
-		IsAdmin:  false,
-		UserName: "updateduser01",
-		FullName: "Updated User 01",
-		Email:    "updateduser01@example.com",
+		IsAdmin:        false,
+		UserName:       "updateduser01",
+		FullName:       "Updated User 01",
+		Email:          "updateduser01@example.com",
+		MemberChangeID: memberChangeID,
+		PrevUserName:   "user01",
+		PrevEmail:      "user01@example.com",
 	})
 
 	out := []eventstore.Event{
 		&eventstore.EventMemberUpdated{
-			IsAdmin:  false,
-			UserName: "updateduser01",
-			FullName: "Updated User 01",
-			Email:    "updateduser01@example.com",
+			IsAdmin:        false,
+			UserName:       "updateduser01",
+			FullName:       "Updated User 01",
+			Email:          "updateduser01@example.com",
+			MemberChangeID: memberChangeID,
+			PrevUserName:   "user01",
+			PrevEmail:      "user01@example.com",
 		},
 	}
 
@@ -124,6 +173,20 @@ func TestUpdateMember(t *testing.T) {
 	}
 
 	runTest(t, test)
+
+	// reexecute command using current state, should return no events since the
+	// memberChangeID has been already handled
+	storedEvents, err := toStoredEvents(out, aggregate.AggregateType(), aggregate.ID())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	test = &testData{
+		State:     storedEvents,
+		Aggregate: aggregate,
+		Command:   command,
+	}
+	runTest(t, test)
 }
 
 func TestUpdateNotExistingMember(t *testing.T) {
@@ -134,21 +197,25 @@ func TestUpdateNotExistingMember(t *testing.T) {
 	correlationID := uidGenerator.UUID("")
 	causationID := uidGenerator.UUID("")
 
+	memberChangeID := uidGenerator.UUID("")
+
 	aggregate := NewMember(uidGenerator, memberID)
 
 	command := commands.NewCommand(commands.CommandTypeUpdateMember, correlationID, causationID, util.NilID, &commands.UpdateMember{
-		IsAdmin:  false,
-		UserName: "user01",
-		FullName: "User 01",
-		Email:    "user01@example.com",
+		IsAdmin:        false,
+		UserName:       "user01",
+		FullName:       "User 01",
+		Email:          "user01@example.com",
+		MemberChangeID: memberChangeID,
 	})
 
 	out := []eventstore.Event{
 		&eventstore.EventMemberUpdated{
-			IsAdmin:  false,
-			UserName: "user01",
-			FullName: "User 01",
-			Email:    "user01@example.com",
+			IsAdmin:        false,
+			UserName:       "user01",
+			FullName:       "User 01",
+			Email:          "user01@example.com",
+			MemberChangeID: memberChangeID,
 		},
 	}
 
