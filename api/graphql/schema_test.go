@@ -2891,7 +2891,7 @@ func TestConcurrentChangeRolesTree(t *testing.T) {
 				}
 			}
 			`,
-			Error: fmt.Errorf(`graphql: failed to execute query: pq: duplicate key value violates unique constraint "event_aggregatetype_aggregateid_version_key"`),
+			Error: fmt.Errorf(`graphql: failed to execute query: pq: duplicate key value violates unique constraint "event_category_streamid_version_key"`),
 		},
 	}, true)
 }

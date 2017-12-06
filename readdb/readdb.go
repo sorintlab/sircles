@@ -2442,7 +2442,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		}
 
 		err := s.tx.Do(func(tx *db.WrappedTx) error {
-			if _, err := tx.Exec("insert into timeline (timestamp, groupid, aggregatetype, aggregateid) values ($1, $2, $3, $4)", tl.Timestamp, metaData.GroupID.UUID, event.AggregateType, event.AggregateID); err != nil {
+			if _, err := tx.Exec("insert into timeline (timestamp, groupid, aggregatetype, aggregateid) values ($1, $2, $3, $4)", tl.Timestamp, metaData.GroupID.UUID, event.Category, event.StreamID); err != nil {
 				return errors.Wrap(err, "failed to insert timeline")
 			}
 			return nil
@@ -2674,7 +2674,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeTensionCreated:
 		data := data.(*eventstore.EventTensionCreated)
-		tensionID, err := util.IDFromString(event.AggregateID)
+		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
@@ -2698,7 +2698,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeTensionUpdated:
 		data := data.(*eventstore.EventTensionUpdated)
-		tensionID, err := util.IDFromString(event.AggregateID)
+		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
@@ -2715,7 +2715,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeTensionRoleChanged:
 		data := data.(*eventstore.EventTensionRoleChanged)
-		tensionID, err := util.IDFromString(event.AggregateID)
+		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
@@ -2733,7 +2733,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeTensionClosed:
 		data := data.(*eventstore.EventTensionClosed)
-		tensionID, err := util.IDFromString(event.AggregateID)
+		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
@@ -2754,7 +2754,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeMemberCreated:
 		data := data.(*eventstore.EventMemberCreated)
-		memberID, err := util.IDFromString(event.AggregateID)
+		memberID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
@@ -2771,7 +2771,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeMemberUpdated:
 		data := data.(*eventstore.EventMemberUpdated)
-		memberID, err := util.IDFromString(event.AggregateID)
+		memberID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
@@ -2788,7 +2788,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	case eventstore.EventTypeMemberPasswordSet:
 		data := data.(*eventstore.EventMemberPasswordSet)
-		memberID, err := util.IDFromString(event.AggregateID)
+		memberID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
@@ -2807,7 +2807,7 @@ func (s *readDBService) ApplyEvent(event *eventstore.StoredEvent) error {
 		}
 	case eventstore.EventTypeMemberAvatarSet:
 		data := data.(*eventstore.EventMemberAvatarSet)
-		memberID, err := util.IDFromString(event.AggregateID)
+		memberID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}

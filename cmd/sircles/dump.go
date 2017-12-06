@@ -85,7 +85,7 @@ func dump(cmd *cobra.Command, args []string) error {
 	i := int64(1)
 	lastSeqNumber := int64(1)
 	for {
-		events, err := es.GetEvents(i, 100)
+		events, err := es.GetAllEvents(i, 100)
 		if err != nil {
 			return err
 		}

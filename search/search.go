@@ -138,7 +138,7 @@ func (s *SearchEngine) eventsPoller() {
 	}
 
 	for {
-		events, err := es.GetEvents(eventSeqNumber+1, 100)
+		events, err := es.GetAllEvents(eventSeqNumber+1, 100)
 		if err != nil {
 			log.Errorf("cannot get events: %+v", err)
 			return
@@ -307,14 +307,14 @@ func (s *SearchEngine) HandlEvent(event *eventstore.StoredEvent) error {
 	case eventstore.EventTypeTensionClosed:
 
 	case eventstore.EventTypeMemberCreated:
-		memberID, err := util.IDFromString(event.AggregateID)
+		memberID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
 		reindexMembers = append(reindexMembers, memberID)
 
 	case eventstore.EventTypeMemberUpdated:
-		memberID, err := util.IDFromString(event.AggregateID)
+		memberID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
