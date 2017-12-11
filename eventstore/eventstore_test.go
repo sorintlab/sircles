@@ -54,11 +54,11 @@ func TestWriteEvents(t *testing.T) {
 	}
 	es := NewEventStore(tx)
 
-	if _, err := es.WriteEvents(events, RolesTreeAggregate, RolesTreeAggregateID.String(), 0); err != nil {
+	if _, err := es.WriteEvents(events, RolesTreeAggregate.String(), RolesTreeAggregateID.String(), 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	writtenEvents, err := es.GetEvents(0, 1000)
+	writtenEvents, err := es.GetAllEvents(0, 1000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -69,11 +69,11 @@ func TestWriteEvents(t *testing.T) {
 		t.Fatalf("expected event sequence %d, got %d", expectedSeq, seq)
 	}
 
-	if _, err := es.WriteEvents(events, RolesTreeAggregate, RolesTreeAggregateID.String(), 3); err != nil {
+	if _, err := es.WriteEvents(events, RolesTreeAggregate.String(), RolesTreeAggregateID.String(), 3); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	writtenEvents, err = es.GetEvents(0, 1000)
+	writtenEvents, err = es.GetAllEvents(0, 1000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestWriteEvents(t *testing.T) {
 
 	// Write events with different version than the current one
 	expectedErr := fmt.Errorf("current version %d different than provided version %d", 6, 5)
-	if _, err := es.WriteEvents(events, RolesTreeAggregate, RolesTreeAggregateID.String(), 5); err == nil {
+	if _, err := es.WriteEvents(events, RolesTreeAggregate.String(), RolesTreeAggregateID.String(), 5); err == nil {
 		t.Fatalf("expected error %q, got no error", expectedErr)
 	} else {
 		if err.Error() != expectedErr.Error() {
@@ -161,14 +161,14 @@ func TestRestoreEvents(t *testing.T) {
 	}
 	es := NewEventStore(tx)
 
-	if _, err := es.WriteEvents(events1, RolesTreeAggregate, "b1399c23-5b50-4c72-b803-804efaba0cb1", 0); err != nil {
+	if _, err := es.WriteEvents(events1, RolesTreeAggregate.String(), "b1399c23-5b50-4c72-b803-804efaba0cb1", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, err := es.WriteEvents(events2, RolesTreeAggregate, "65c4dce5-2935-46eb-a71e-3ea1cb4b970c", 0); err != nil {
+	if _, err := es.WriteEvents(events2, RolesTreeAggregate.String(), "65c4dce5-2935-46eb-a71e-3ea1cb4b970c", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	writtenEvents, err := es.GetEvents(0, 1000)
+	writtenEvents, err := es.GetAllEvents(0, 1000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestRestoreEvents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	restoredEvents, err := es.GetEvents(0, 1000)
+	restoredEvents, err := es.GetAllEvents(0, 1000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

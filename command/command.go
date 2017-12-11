@@ -100,7 +100,7 @@ func (s *CommandService) writeEvents(events []eventstore.Event, command *command
 		return nil, err
 	}
 
-	return s.es.WriteEvents(eventsData, aggregateType, aggregateID, version)
+	return s.es.WriteEvents(eventsData, aggregateType.String(), aggregateID, version)
 }
 
 // VERY BIG TODO(sgotti)!!!
@@ -226,7 +226,7 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 	// TODO(sgotti) split validation from event creation, this will lead to some
 	// code duplication
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -460,7 +460,7 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 		}
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -662,7 +662,7 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 	// TODO(sgotti) split validation from event creation, this will lead to some
 	// code duplication
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -1140,7 +1140,7 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 		return res, util.NilID, ErrValidation
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -1229,7 +1229,7 @@ func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID ut
 	}
 	roleAdditionalContent.ID = roleID
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -1412,7 +1412,7 @@ func (s *CommandService) createMember(ctx context.Context, c *change.CreateMembe
 	}
 	member.ID = s.uidGenerator.UUID(member.UserName)
 
-	version, err := s.es.AggregateVersion(member.ID.String())
+	version, err := s.es.StreamVersion(member.ID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -1592,7 +1592,7 @@ func (s *CommandService) UpdateMember(ctx context.Context, c *change.UpdateMembe
 	member.FullName = c.FullName
 	member.Email = c.Email
 
-	version, err := s.es.AggregateVersion(member.ID.String())
+	version, err := s.es.StreamVersion(member.ID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -1660,7 +1660,7 @@ func (s *CommandService) SetMemberPassword(ctx context.Context, memberID util.ID
 		}
 	}
 
-	version, err := s.es.AggregateVersion(memberID.String())
+	version, err := s.es.StreamVersion(memberID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1735,7 +1735,7 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 		res.GenericError = errors.Errorf("matchUID already in use")
 	}
 
-	version, err := s.es.AggregateVersion(memberID.String())
+	version, err := s.es.StreamVersion(memberID.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1831,7 +1831,7 @@ func (s *CommandService) CreateTension(ctx context.Context, c *change.CreateTens
 	}
 	tension.ID = s.uidGenerator.UUID(tension.Title)
 
-	version, err := s.es.AggregateVersion(tension.ID.String())
+	version, err := s.es.StreamVersion(tension.ID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -1972,7 +1972,7 @@ func (s *CommandService) UpdateTension(ctx context.Context, c *change.UpdateTens
 		roleChanged = true
 	}
 
-	version, err := s.es.AggregateVersion(tension.ID.String())
+	version, err := s.es.StreamVersion(tension.ID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2048,7 +2048,7 @@ func (s *CommandService) CloseTension(ctx context.Context, c *change.CloseTensio
 		return res, util.NilID, ErrValidation
 	}
 
-	version, err := s.es.AggregateVersion(tension.ID.String())
+	version, err := s.es.StreamVersion(tension.ID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2117,7 +2117,7 @@ func (s *CommandService) CircleAddDirectMember(ctx context.Context, roleID util.
 		return res, util.NilID, ErrValidation
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2189,7 +2189,7 @@ func (s *CommandService) CircleRemoveDirectMember(ctx context.Context, roleID ut
 		return nil, util.NilID, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2290,7 +2290,7 @@ func (s *CommandService) CircleSetLeadLinkMember(ctx context.Context, roleID, me
 		return nil, util.NilID, errors.Errorf("member with id %s doesn't exist", memberID)
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2420,7 +2420,7 @@ func (s *CommandService) CircleUnsetLeadLinkMember(ctx context.Context, roleID u
 		return res, util.NilID, nil
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2504,7 +2504,7 @@ func (s *CommandService) CircleSetCoreRoleMember(ctx context.Context, roleType m
 		return nil, util.NilID, errors.Errorf("member with id %s doesn't exist", memberID)
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2610,7 +2610,7 @@ func (s *CommandService) CircleUnsetCoreRoleMember(ctx context.Context, roleType
 		return res, util.NilID, nil
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2706,7 +2706,7 @@ func (s *CommandService) RoleAddMember(ctx context.Context, roleID util.ID, memb
 		return nil, util.NilID, errors.Errorf("member with id %s doesn't exist", memberID)
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2785,7 +2785,7 @@ func (s *CommandService) RoleRemoveMember(ctx context.Context, roleID util.ID, m
 		return nil, util.NilID, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2873,7 +2873,7 @@ func (s *CommandService) RoleUpdateMember(ctx context.Context, roleID util.ID, m
 		return nil, util.NilID, errors.Errorf("member with id %s is not a member of role %s", memberID, roleID)
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -2935,7 +2935,7 @@ func (s *CommandService) SetupRootRole() (util.ID, error) {
 		Name:     "General",
 	}
 
-	version, err := s.es.AggregateVersion(eventstore.RolesTreeAggregateID.String())
+	version, err := s.es.StreamVersion(eventstore.RolesTreeAggregateID.String())
 	if err != nil {
 		return util.NilID, err
 	}

@@ -22,16 +22,16 @@ type StoredEvent struct {
 	ID             util.ID // unique global event ID
 	SequenceNumber int64   // Global event sequence
 	EventType      EventType
-	AggregateType  AggregateType
-	AggregateID    string
+	Category       string
+	StreamID       string
 	Timestamp      time.Time
-	Version        int64 // Aggregate Version. Increased for every event emitted by a specific aggregate.
+	Version        int64 // Event version in the stream.
 	Data           []byte
 	MetaData       []byte
 }
 
 func (e *StoredEvent) String() string {
-	return fmt.Sprintf("ID: %s, SequenceNumber: %d, EventType: %q, AggregateType: %q, AggregateID: %q, TimeStamp: %q, Version: %d", e.ID, e.SequenceNumber, e.EventType, e.AggregateType, e.AggregateID, e.Timestamp, e.Version)
+	return fmt.Sprintf("ID: %s, SequenceNumber: %d, EventType: %q, Category: %q, StreamID: %q, TimeStamp: %q, Version: %d", e.ID, e.SequenceNumber, e.EventType, e.Category, e.StreamID, e.Timestamp, e.Version)
 }
 
 func (e *StoredEvent) Format(f fmt.State, c rune) {
@@ -106,13 +106,17 @@ func GenEventData(events []Event, correlationID, causationID, groupID, issuerID 
 	return eventsData, nil
 }
 
-type AggregateVersion struct {
-	AggregateType AggregateType
-	AggregateID   string
-	Version       int64 // Aggregate Version. Increased for every event emitted by a specific aggregate.
+type StreamVersion struct {
+	Category string
+	StreamID string
+	Version  int64 // Stream Version. Increased for every event saved in the stream.
 }
 
 type AggregateType string
+
+func (at AggregateType) String() string {
+	return string(at)
+}
 
 const (
 	RolesTreeAggregate AggregateType = "rolestree"
