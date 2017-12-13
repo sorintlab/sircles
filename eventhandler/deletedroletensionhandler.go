@@ -11,6 +11,7 @@ import (
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
@@ -85,7 +86,7 @@ func (h *DeletedRoleTensionHandler) updateTensions(ldb *db.DB) error {
 		}
 
 		groupID := h.uidGenerator.UUID("")
-		eventsData, err := eventstore.GenEventData(events, &correlationID, &causationID, &groupID, nil)
+		eventsData, err := ep.GenEventData(events, &correlationID, &causationID, &groupID, nil)
 		if err != nil {
 			return err
 		}
@@ -154,16 +155,16 @@ func (h *DeletedRoleTensionHandler) updateSnapshot(tx *db.Tx) (int, error) {
 func (h *DeletedRoleTensionHandler) handleEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 	log.Debugf("event: %v", event)
 
-	data, err := event.UnmarshalData()
+	data, err := ep.UnmarshalData(event)
 	if err != nil {
 		return err
 	}
 
-	switch event.EventType {
-	case eventstore.EventTypeRoleCreated:
+	switch ep.EventType(event.EventType) {
+	case ep.EventTypeRoleCreated:
 
-	case eventstore.EventTypeRoleUpdated:
-		data := data.(*eventstore.EventRoleUpdated)
+	case ep.EventTypeRoleUpdated:
+		data := data.(*ep.EventRoleUpdated)
 		switch data.RoleType {
 		case models.RoleTypeCircle:
 			if err := h.deleteDeletedRole(tx, data.RoleID); err != nil {
@@ -175,14 +176,14 @@ func (h *DeletedRoleTensionHandler) handleEvent(tx *db.Tx, event *eventstore.Sto
 			}
 		}
 
-	case eventstore.EventTypeRoleDeleted:
-		data := data.(*eventstore.EventRoleDeleted)
+	case ep.EventTypeRoleDeleted:
+		data := data.(*ep.EventRoleDeleted)
 		if err := h.insertDeletedRole(tx, data.RoleID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeTensionCreated:
-		data := data.(*eventstore.EventTensionCreated)
+	case ep.EventTypeTensionCreated:
+		data := data.(*ep.EventTensionCreated)
 		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
@@ -191,8 +192,8 @@ func (h *DeletedRoleTensionHandler) handleEvent(tx *db.Tx, event *eventstore.Sto
 			return err
 		}
 
-	case eventstore.EventTypeTensionRoleChanged:
-		data := data.(*eventstore.EventTensionRoleChanged)
+	case ep.EventTypeTensionRoleChanged:
+		data := data.(*ep.EventTensionRoleChanged)
 		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
@@ -201,7 +202,7 @@ func (h *DeletedRoleTensionHandler) handleEvent(tx *db.Tx, event *eventstore.Sto
 			return err
 		}
 
-	case eventstore.EventTypeTensionClosed:
+	case ep.EventTypeTensionClosed:
 		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
@@ -212,7 +213,7 @@ func (h *DeletedRoleTensionHandler) handleEvent(tx *db.Tx, event *eventstore.Sto
 	}
 
 	// for every tension event update tension version if tension exists
-	if event.Category == eventstore.TensionAggregate.String() {
+	if event.Category == aggregate.TensionAggregate.String() {
 		tensionID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err

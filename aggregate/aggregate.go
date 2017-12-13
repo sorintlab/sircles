@@ -5,16 +5,17 @@ import (
 
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/util"
 )
 
 type Aggregate interface {
 	ApplyEvents(events []*eventstore.StoredEvent) error
-	HandleCommand(command *commands.Command) ([]eventstore.Event, error)
+	HandleCommand(command *commands.Command) ([]ep.Event, error)
 	Version() int64
 	ID() string
-	AggregateType() eventstore.AggregateType
+	AggregateType() AggregateType
 }
 
 type Repository interface {
@@ -40,7 +41,7 @@ func ExecCommand(command *commands.Command, a Aggregate, es *eventstore.EventSto
 
 	// The events correlationID is the command correlationID
 	// The events causationID is the command ID
-	eventsData, err := eventstore.GenEventData(events, &command.CorrelationID, &command.ID, &groupID, &command.IssuerID)
+	eventsData, err := ep.GenEventData(events, &command.CorrelationID, &command.ID, &groupID, &command.IssuerID)
 	if err != nil {
 		return util.NilID, 0, err
 	}

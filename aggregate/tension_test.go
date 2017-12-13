@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sorintlab/sircles/command/commands"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/util"
 )
@@ -27,8 +28,8 @@ func TestCreateTension(t *testing.T) {
 		RoleID:      nil,
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventTensionCreated{
+	out := []ep.Event{
+		&ep.EventTensionCreated{
 			Title:       "tension01",
 			Description: "Tension 01",
 			MemberID:    memberID,
@@ -62,8 +63,8 @@ func setupTension(t *testing.T, tensionID util.ID) []*eventstore.StoredEvent {
 		RoleID:      nil,
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventTensionCreated{
+	out := []ep.Event{
+		&ep.EventTensionCreated{
 			Title:       "tension01",
 			Description: "Tension 01",
 			MemberID:    memberID,
@@ -100,8 +101,8 @@ func TestUpdateTension(t *testing.T) {
 		Description: "Tension 01 new description",
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventTensionUpdated{
+	out := []ep.Event{
+		&ep.EventTensionUpdated{
 			Title:       "tension 01 new title",
 			Description: "Tension 01 new description",
 		},
@@ -133,8 +134,8 @@ func TestUpdateNotExistingTension(t *testing.T) {
 		Description: "Tension 01 new description",
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventTensionUpdated{
+	out := []ep.Event{
+		&ep.EventTensionUpdated{
 			Title:       "tension 01 new title",
 			Description: "Tension 01 new description",
 		},

@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
@@ -69,12 +70,12 @@ func (m *Member) ID() string {
 	return m.id.String()
 }
 
-func (m *Member) AggregateType() eventstore.AggregateType {
-	return eventstore.MemberAggregate
+func (m *Member) AggregateType() AggregateType {
+	return MemberAggregate
 }
 
-func (m *Member) HandleCommand(command *commands.Command) ([]eventstore.Event, error) {
-	var events []eventstore.Event
+func (m *Member) HandleCommand(command *commands.Command) ([]ep.Event, error) {
+	var events []ep.Event
 	var err error
 	switch command.CommandType {
 	case commands.CommandTypeCreateMember:
@@ -93,8 +94,8 @@ func (m *Member) HandleCommand(command *commands.Command) ([]eventstore.Event, e
 	return events, err
 }
 
-func (m *Member) HandleCreateMemberCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *Member) HandleCreateMemberCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CreateMember)
 
@@ -115,25 +116,25 @@ func (m *Member) HandleCreateMemberCommand(command *commands.Command) ([]eventst
 	}
 	member.ID = m.id
 
-	events = append(events, eventstore.NewEventMemberCreated(member, c.MemberChangeID))
+	events = append(events, ep.NewEventMemberCreated(member, c.MemberChangeID))
 
 	if c.Avatar != nil {
-		events = append(events, eventstore.NewEventMemberAvatarSet(m.id, c.Avatar))
+		events = append(events, ep.NewEventMemberAvatarSet(m.id, c.Avatar))
 	}
 
 	if c.PasswordHash != "" {
-		events = append(events, eventstore.NewEventMemberPasswordSet(m.id, c.PasswordHash))
+		events = append(events, ep.NewEventMemberPasswordSet(m.id, c.PasswordHash))
 	}
 
 	if c.MatchUID != "" {
-		events = append(events, eventstore.NewEventMemberMatchUIDSet(m.id, c.MemberChangeID, c.MatchUID, ""))
+		events = append(events, ep.NewEventMemberMatchUIDSet(m.id, c.MemberChangeID, c.MatchUID, ""))
 	}
 
 	return events, nil
 }
 
-func (m *Member) HandleUpdateMemberCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *Member) HandleUpdateMemberCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.UpdateMember)
 
@@ -161,27 +162,27 @@ func (m *Member) HandleUpdateMemberCommand(command *commands.Command) ([]eventst
 	}
 	member.ID = m.id
 
-	events = append(events, eventstore.NewEventMemberUpdated(member, c.MemberChangeID, m.userName, m.email))
+	events = append(events, ep.NewEventMemberUpdated(member, c.MemberChangeID, m.userName, m.email))
 
 	if c.Avatar != nil {
-		events = append(events, eventstore.NewEventMemberAvatarSet(m.id, c.Avatar))
+		events = append(events, ep.NewEventMemberAvatarSet(m.id, c.Avatar))
 	}
 
 	return events, nil
 }
 
-func (m *Member) HandleSetMemberPasswordCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *Member) HandleSetMemberPasswordCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.SetMemberPassword)
 
-	events = append(events, eventstore.NewEventMemberPasswordSet(m.id, c.PasswordHash))
+	events = append(events, ep.NewEventMemberPasswordSet(m.id, c.PasswordHash))
 
 	return events, nil
 }
 
-func (m *Member) HandleSetMemberMatchUIDCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *Member) HandleSetMemberMatchUIDCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.SetMemberMatchUID)
 
@@ -189,7 +190,7 @@ func (m *Member) HandleSetMemberMatchUIDCommand(command *commands.Command) ([]ev
 		return nil, nil
 	}
 
-	events = append(events, eventstore.NewEventMemberMatchUIDSet(m.id, c.MemberChangeID, c.MatchUID, m.matchUID))
+	events = append(events, ep.NewEventMemberMatchUIDSet(m.id, c.MemberChangeID, c.MatchUID, m.matchUID))
 
 	return events, nil
 }
@@ -206,16 +207,16 @@ func (m *Member) ApplyEvents(events []*eventstore.StoredEvent) error {
 func (m *Member) ApplyEvent(event *eventstore.StoredEvent) error {
 	log.Debugf("event: %v", event)
 
-	data, err := event.UnmarshalData()
+	data, err := ep.UnmarshalData(event)
 	if err != nil {
 		return err
 	}
 
 	m.version = event.Version
 
-	switch event.EventType {
-	case eventstore.EventTypeMemberCreated:
-		data := data.(*eventstore.EventMemberCreated)
+	switch ep.EventType(event.EventType) {
+	case ep.EventTypeMemberCreated:
+		data := data.(*ep.EventMemberCreated)
 
 		m.created = true
 
@@ -226,8 +227,8 @@ func (m *Member) ApplyEvent(event *eventstore.StoredEvent) error {
 
 		m.createRequests[data.MemberChangeID] = struct{}{}
 
-	case eventstore.EventTypeMemberUpdated:
-		data := data.(*eventstore.EventMemberUpdated)
+	case ep.EventTypeMemberUpdated:
+		data := data.(*ep.EventMemberUpdated)
 
 		m.userName = data.UserName
 		m.fullName = data.FullName
@@ -236,8 +237,8 @@ func (m *Member) ApplyEvent(event *eventstore.StoredEvent) error {
 
 		m.updateRequests[data.MemberChangeID] = struct{}{}
 
-	case eventstore.EventTypeMemberMatchUIDSet:
-		data := data.(*eventstore.EventMemberMatchUIDSet)
+	case ep.EventTypeMemberMatchUIDSet:
+		data := data.(*ep.EventMemberMatchUIDSet)
 
 		m.matchUID = data.MatchUID
 

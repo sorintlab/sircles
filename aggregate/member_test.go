@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sorintlab/sircles/command/commands"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/util"
 )
@@ -30,15 +31,15 @@ func TestCreateMember(t *testing.T) {
 		MemberChangeID: memberChangeID,
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventMemberCreated{
+	out := []ep.Event{
+		&ep.EventMemberCreated{
 			IsAdmin:        false,
 			UserName:       "user01",
 			FullName:       "User 01",
 			Email:          "user01@example.com",
 			MemberChangeID: memberChangeID,
 		},
-		&eventstore.EventMemberPasswordSet{
+		&ep.EventMemberPasswordSet{
 			PasswordHash: "passwordHash",
 		},
 	}
@@ -104,15 +105,15 @@ func setupMember(t *testing.T, memberID util.ID) []*eventstore.StoredEvent {
 		MemberChangeID: memberChangeID,
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventMemberCreated{
+	out := []ep.Event{
+		&ep.EventMemberCreated{
 			IsAdmin:        false,
 			UserName:       "user01",
 			FullName:       "User 01",
 			Email:          "user01@example.com",
 			MemberChangeID: memberChangeID,
 		},
-		&eventstore.EventMemberPasswordSet{
+		&ep.EventMemberPasswordSet{
 			PasswordHash: "passwordHash",
 		},
 	}
@@ -153,8 +154,8 @@ func TestUpdateMember(t *testing.T) {
 		PrevEmail:      "user01@example.com",
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventMemberUpdated{
+	out := []ep.Event{
+		&ep.EventMemberUpdated{
 			IsAdmin:        false,
 			UserName:       "updateduser01",
 			FullName:       "Updated User 01",
@@ -209,8 +210,8 @@ func TestUpdateNotExistingMember(t *testing.T) {
 		MemberChangeID: memberChangeID,
 	})
 
-	out := []eventstore.Event{
-		&eventstore.EventMemberUpdated{
+	out := []ep.Event{
+		&ep.EventMemberUpdated{
 			IsAdmin:        false,
 			UserName:       "user01",
 			FullName:       "User 01",

@@ -8,6 +8,7 @@ import (
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
@@ -136,11 +137,11 @@ func (r *RolesTree) ID() string {
 	return r.id.String()
 }
 
-func (r *RolesTree) AggregateType() eventstore.AggregateType {
-	return eventstore.RolesTreeAggregate
+func (r *RolesTree) AggregateType() AggregateType {
+	return RolesTreeAggregate
 }
 
-func (r *RolesTree) HandleCommand(command *commands.Command) ([]eventstore.Event, error) {
+func (r *RolesTree) HandleCommand(command *commands.Command) ([]ep.Event, error) {
 	ldb, err := newDB(r.dataDir)
 	if err != nil {
 		return nil, err
@@ -148,7 +149,7 @@ func (r *RolesTree) HandleCommand(command *commands.Command) ([]eventstore.Event
 	defer ldb.Close()
 
 	var version int64
-	var events []eventstore.Event
+	var events []ep.Event
 	err = ldb.Do(func(tx *db.Tx) error {
 		var err error
 
@@ -210,8 +211,8 @@ func (r *RolesTree) HandleCommand(command *commands.Command) ([]eventstore.Event
 	return events, nil
 }
 
-func (r *RolesTree) HandleSetupRootRoleCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleSetupRootRoleCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.SetupRootRole)
 
@@ -221,7 +222,7 @@ func (r *RolesTree) HandleSetupRootRoleCommand(tx *db.Tx, command *commands.Comm
 	}
 	role.ID = c.RootRoleID
 
-	events = append(events, eventstore.NewEventRoleCreated(role, nil))
+	events = append(events, ep.NewEventRoleCreated(role, nil))
 
 	es, err := r.roleAddCoreRoles(role, true)
 	if err != nil {
@@ -232,8 +233,8 @@ func (r *RolesTree) HandleSetupRootRoleCommand(tx *db.Tx, command *commands.Comm
 	return events, nil
 }
 
-func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.UpdateRootRole)
 
@@ -260,7 +261,7 @@ func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Com
 		rootRole.Purpose = c.UpdateRootRoleChange.Purpose
 	}
 
-	events = append(events, eventstore.NewEventRoleUpdated(rootRole))
+	events = append(events, ep.NewEventRoleUpdated(rootRole))
 
 	domains, err := r.roleDomains(tx, rootRole.ID)
 	if err != nil {
@@ -277,7 +278,7 @@ func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Com
 		domain.Description = createDomainChange.Description
 		domain.ID = r.uidGenerator.UUID(domain.Description)
 
-		events = append(events, eventstore.NewEventRoleDomainCreated(rootRole.ID, &domain))
+		events = append(events, ep.NewEventRoleDomainCreated(rootRole.ID, &domain))
 	}
 
 	for _, deleteDomainChange := range c.UpdateRootRoleChange.DeleteDomainChanges {
@@ -291,7 +292,7 @@ func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Com
 		if !found {
 			return nil, errors.Errorf("cannot delete unexistent domain %s", deleteDomainChange.ID)
 		}
-		events = append(events, eventstore.NewEventRoleDomainDeleted(rootRole.ID, deleteDomainChange.ID))
+		events = append(events, ep.NewEventRoleDomainDeleted(rootRole.ID, deleteDomainChange.ID))
 	}
 
 	for _, updateDomainChange := range c.UpdateRootRoleChange.UpdateDomainChanges {
@@ -308,7 +309,7 @@ func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Com
 		if updateDomainChange.DescriptionChanged {
 			domain.Description = updateDomainChange.Description
 		}
-		events = append(events, eventstore.NewEventRoleDomainUpdated(rootRole.ID, domain))
+		events = append(events, ep.NewEventRoleDomainUpdated(rootRole.ID, domain))
 	}
 
 	for _, createAccountabilityChange := range c.UpdateRootRoleChange.CreateAccountabilityChanges {
@@ -316,7 +317,7 @@ func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Com
 		accountability.Description = createAccountabilityChange.Description
 		accountability.ID = r.uidGenerator.UUID(accountability.Description)
 
-		events = append(events, eventstore.NewEventRoleAccountabilityCreated(rootRole.ID, &accountability))
+		events = append(events, ep.NewEventRoleAccountabilityCreated(rootRole.ID, &accountability))
 	}
 
 	for _, deleteAccountabilityChange := range c.UpdateRootRoleChange.DeleteAccountabilityChanges {
@@ -330,7 +331,7 @@ func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Com
 		if !found {
 			return nil, errors.Errorf("cannot delete unexistent accountability %s", deleteAccountabilityChange.ID)
 		}
-		events = append(events, eventstore.NewEventRoleAccountabilityDeleted(rootRole.ID, deleteAccountabilityChange.ID))
+		events = append(events, ep.NewEventRoleAccountabilityDeleted(rootRole.ID, deleteAccountabilityChange.ID))
 	}
 
 	for _, updateAccountabilityChange := range c.UpdateRootRoleChange.UpdateAccountabilityChanges {
@@ -347,14 +348,14 @@ func (r *RolesTree) HandleUpdateRootRoleCommand(tx *db.Tx, command *commands.Com
 		if updateAccountabilityChange.DescriptionChanged {
 			accountability.Description = updateAccountabilityChange.Description
 		}
-		events = append(events, eventstore.NewEventRoleAccountabilityUpdated(rootRole.ID, accountability))
+		events = append(events, ep.NewEventRoleAccountabilityUpdated(rootRole.ID, accountability))
 	}
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleCreateChildRoleCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleCreateChildRoleCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleCreateChildRole)
 
@@ -414,7 +415,7 @@ func (r *RolesTree) HandleCircleCreateChildRoleCommand(tx *db.Tx, command *comma
 	}
 	newChildRole.ID = c.NewRoleID
 
-	events = append(events, eventstore.NewEventRoleCreated(newChildRole, &c.RoleID))
+	events = append(events, ep.NewEventRoleCreated(newChildRole, &c.RoleID))
 
 	for _, createDomainChange := range c.CreateRoleChange.CreateDomainChanges {
 		domain := models.Domain{}
@@ -422,7 +423,7 @@ func (r *RolesTree) HandleCircleCreateChildRoleCommand(tx *db.Tx, command *comma
 
 		domain.ID = r.uidGenerator.UUID(domain.Description)
 
-		events = append(events, eventstore.NewEventRoleDomainCreated(newChildRole.ID, &domain))
+		events = append(events, ep.NewEventRoleDomainCreated(newChildRole.ID, &domain))
 	}
 
 	for _, createAccountabilityChange := range c.CreateRoleChange.CreateAccountabilityChanges {
@@ -431,7 +432,7 @@ func (r *RolesTree) HandleCircleCreateChildRoleCommand(tx *db.Tx, command *comma
 
 		accountability.ID = r.uidGenerator.UUID(accountability.Description)
 
-		events = append(events, eventstore.NewEventRoleAccountabilityCreated(newChildRole.ID, &accountability))
+		events = append(events, ep.NewEventRoleAccountabilityCreated(newChildRole.ID, &accountability))
 	}
 
 	// Add core roles to circle
@@ -451,15 +452,15 @@ func (r *RolesTree) HandleCircleCreateChildRoleCommand(tx *db.Tx, command *comma
 			}
 		}
 		if fromParent {
-			events = append(events, eventstore.NewEventRoleChangedParent(child.ID, &newChildRole.ID))
+			events = append(events, ep.NewEventRoleChangedParent(child.ID, &newChildRole.ID))
 		}
 	}
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleUpdateChildRole)
 
@@ -558,7 +559,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		}
 
 		for _, roleMemberID := range roleMembersIDs {
-			events = append(events, eventstore.NewEventRoleMemberRemoved(childRole.ID, roleMemberID))
+			events = append(events, ep.NewEventRoleMemberRemoved(childRole.ID, roleMemberID))
 		}
 	}
 
@@ -576,7 +577,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 
 		// Remove circle direct members since they don't exist on a role
 		for _, circleDirectMemberID := range circleDirectMembersIDs {
-			events = append(events, eventstore.NewEventCircleDirectMemberRemoved(childRole.ID, circleDirectMemberID))
+			events = append(events, ep.NewEventCircleDirectMemberRemoved(childRole.ID, circleDirectMemberID))
 		}
 
 		// Remove circle leadLink member
@@ -604,7 +605,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 			}
 		}
 		if toParent {
-			events = append(events, eventstore.NewEventRoleChangedParent(child.ID, &role.ID))
+			events = append(events, ep.NewEventRoleChangedParent(child.ID, &role.ID))
 		} else {
 			if c.UpdateRoleChange.MakeRole {
 				// recursive delete for sub roles
@@ -617,7 +618,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		}
 	}
 
-	events = append(events, eventstore.NewEventRoleUpdated(childRole))
+	events = append(events, ep.NewEventRoleUpdated(childRole))
 
 	if c.UpdateRoleChange.MakeCircle {
 		// Add core roles to circle
@@ -636,7 +637,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 			}
 		}
 		if fromParent {
-			events = append(events, eventstore.NewEventRoleChangedParent(pChild.ID, &childRole.ID))
+			events = append(events, ep.NewEventRoleChangedParent(pChild.ID, &childRole.ID))
 		}
 	}
 
@@ -655,7 +656,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		domain.Description = createDomainChange.Description
 		domain.ID = r.uidGenerator.UUID(domain.Description)
 
-		events = append(events, eventstore.NewEventRoleDomainCreated(childRole.ID, &domain))
+		events = append(events, ep.NewEventRoleDomainCreated(childRole.ID, &domain))
 	}
 
 	for _, deleteDomainChange := range c.UpdateRoleChange.DeleteDomainChanges {
@@ -669,7 +670,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		if !found {
 			return nil, errors.Errorf("cannot delete unexistent domain %s", deleteDomainChange.ID)
 		}
-		events = append(events, eventstore.NewEventRoleDomainDeleted(childRole.ID, deleteDomainChange.ID))
+		events = append(events, ep.NewEventRoleDomainDeleted(childRole.ID, deleteDomainChange.ID))
 	}
 
 	for _, updateDomainChange := range c.UpdateRoleChange.UpdateDomainChanges {
@@ -686,7 +687,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		if updateDomainChange.DescriptionChanged {
 			domain.Description = updateDomainChange.Description
 		}
-		events = append(events, eventstore.NewEventRoleDomainUpdated(childRole.ID, domain))
+		events = append(events, ep.NewEventRoleDomainUpdated(childRole.ID, domain))
 	}
 
 	for _, createAccountabilityChange := range c.UpdateRoleChange.CreateAccountabilityChanges {
@@ -694,7 +695,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		accountability.Description = createAccountabilityChange.Description
 		accountability.ID = r.uidGenerator.UUID(accountability.Description)
 
-		events = append(events, eventstore.NewEventRoleAccountabilityCreated(childRole.ID, &accountability))
+		events = append(events, ep.NewEventRoleAccountabilityCreated(childRole.ID, &accountability))
 	}
 
 	for _, deleteAccountabilityChange := range c.UpdateRoleChange.DeleteAccountabilityChanges {
@@ -708,7 +709,7 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		if !found {
 			return nil, errors.Errorf("cannot delete unexistent accountability %s", deleteAccountabilityChange.ID)
 		}
-		events = append(events, eventstore.NewEventRoleAccountabilityDeleted(childRole.ID, deleteAccountabilityChange.ID))
+		events = append(events, ep.NewEventRoleAccountabilityDeleted(childRole.ID, deleteAccountabilityChange.ID))
 	}
 
 	for _, updateAccountabilityChange := range c.UpdateRoleChange.UpdateAccountabilityChanges {
@@ -725,14 +726,14 @@ func (r *RolesTree) HandleCircleUpdateChildRoleCommand(tx *db.Tx, command *comma
 		if updateAccountabilityChange.DescriptionChanged {
 			accountability.Description = updateAccountabilityChange.Description
 		}
-		events = append(events, eventstore.NewEventRoleAccountabilityUpdated(childRole.ID, accountability))
+		events = append(events, ep.NewEventRoleAccountabilityUpdated(childRole.ID, accountability))
 	}
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleDeleteChildRoleCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleDeleteChildRoleCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleDeleteChildRole)
 
@@ -778,7 +779,7 @@ func (r *RolesTree) HandleCircleDeleteChildRoleCommand(tx *db.Tx, command *comma
 			}
 		}
 		if toParent {
-			events = append(events, eventstore.NewEventRoleChangedParent(child.ID, &role.ID))
+			events = append(events, ep.NewEventRoleChangedParent(child.ID, &role.ID))
 		}
 	}
 
@@ -791,8 +792,8 @@ func (r *RolesTree) HandleCircleDeleteChildRoleCommand(tx *db.Tx, command *comma
 	return events, nil
 }
 
-func (r *RolesTree) HandleSetRoleAdditionalContentCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleSetRoleAdditionalContentCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.SetRoleAdditionalContent)
 
@@ -804,13 +805,13 @@ func (r *RolesTree) HandleSetRoleAdditionalContentCommand(tx *db.Tx, command *co
 		return nil, errors.Errorf("role with id %s doesn't exist", c.RoleID)
 	}
 
-	events = append(events, eventstore.NewEventRoleAdditionalContentSet(c.RoleID, c.Content))
+	events = append(events, ep.NewEventRoleAdditionalContentSet(c.RoleID, c.Content))
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleAddDirectMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleAddDirectMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleAddDirectMember)
 
@@ -825,13 +826,13 @@ func (r *RolesTree) HandleCircleAddDirectMemberCommand(tx *db.Tx, command *comma
 		return nil, errors.Errorf("role with id %s isn't a circle", c.RoleID)
 	}
 
-	events = append(events, eventstore.NewEventCircleDirectMemberAdded(c.RoleID, c.MemberID))
+	events = append(events, ep.NewEventCircleDirectMemberAdded(c.RoleID, c.MemberID))
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleRemoveDirectMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleRemoveDirectMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleRemoveDirectMember)
 
@@ -863,13 +864,13 @@ func (r *RolesTree) HandleCircleRemoveDirectMemberCommand(tx *db.Tx, command *co
 		return nil, errors.Errorf("member with id %s is not a member of role %s", c.MemberID, c.RoleID)
 	}
 
-	events = append(events, eventstore.NewEventCircleDirectMemberRemoved(c.RoleID, c.MemberID))
+	events = append(events, ep.NewEventCircleDirectMemberRemoved(c.RoleID, c.MemberID))
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleSetLeadLinkMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleSetLeadLinkMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleSetLeadLinkMember)
 
@@ -895,13 +896,13 @@ func (r *RolesTree) HandleCircleSetLeadLinkMemberCommand(tx *db.Tx, command *com
 	}
 	events = append(events, es...)
 
-	events = append(events, eventstore.NewEventCircleLeadLinkMemberSet(c.RoleID, leadLinkRole.ID, c.MemberID))
+	events = append(events, ep.NewEventCircleLeadLinkMemberSet(c.RoleID, leadLinkRole.ID, c.MemberID))
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleUnsetLeadLinkMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleUnsetLeadLinkMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleUnsetLeadLinkMember)
 
@@ -924,8 +925,8 @@ func (r *RolesTree) HandleCircleUnsetLeadLinkMemberCommand(tx *db.Tx, command *c
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleSetCoreRoleMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleSetCoreRoleMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleSetCoreRoleMember)
 
@@ -951,13 +952,13 @@ func (r *RolesTree) HandleCircleSetCoreRoleMemberCommand(tx *db.Tx, command *com
 	}
 	events = append(events, es...)
 
-	events = append(events, eventstore.NewEventCircleCoreRoleMemberSet(c.RoleID, coreRole.ID, c.MemberID, c.RoleType, c.ElectionExpiration))
+	events = append(events, ep.NewEventCircleCoreRoleMemberSet(c.RoleID, coreRole.ID, c.MemberID, c.RoleType, c.ElectionExpiration))
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleCircleUnsetCoreRoleMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleCircleUnsetCoreRoleMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CircleUnsetCoreRoleMember)
 
@@ -981,8 +982,8 @@ func (r *RolesTree) HandleCircleUnsetCoreRoleMemberCommand(tx *db.Tx, command *c
 	return events, nil
 }
 
-func (r *RolesTree) HandleRoleAddMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleRoleAddMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.RoleAddMember)
 
@@ -997,13 +998,13 @@ func (r *RolesTree) HandleRoleAddMemberCommand(tx *db.Tx, command *commands.Comm
 		return nil, errors.Errorf("role with id %s isn't a normal role", c.RoleID)
 	}
 
-	events = append(events, eventstore.NewEventRoleMemberAdded(c.RoleID, c.MemberID, c.Focus, c.NoCoreMember))
+	events = append(events, ep.NewEventRoleMemberAdded(c.RoleID, c.MemberID, c.Focus, c.NoCoreMember))
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleRoleRemoveMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleRoleRemoveMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.RoleRemoveMember)
 
@@ -1035,13 +1036,13 @@ func (r *RolesTree) HandleRoleRemoveMemberCommand(tx *db.Tx, command *commands.C
 		return nil, errors.Errorf("member with id %s is not a member of role %s", c.MemberID, c.RoleID)
 	}
 
-	events = append(events, eventstore.NewEventRoleMemberRemoved(c.RoleID, c.MemberID))
+	events = append(events, ep.NewEventRoleMemberRemoved(c.RoleID, c.MemberID))
 
 	return events, nil
 }
 
-func (r *RolesTree) HandleRoleUpdateMemberCommand(tx *db.Tx, command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) HandleRoleUpdateMemberCommand(tx *db.Tx, command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.RoleUpdateMember)
 
@@ -1073,13 +1074,13 @@ func (r *RolesTree) HandleRoleUpdateMemberCommand(tx *db.Tx, command *commands.C
 		return nil, errors.Errorf("member with id %s is not a member of role %s", c.MemberID, c.RoleID)
 	}
 
-	events = append(events, eventstore.NewEventRoleMemberUpdated(c.RoleID, c.MemberID, c.Focus, c.NoCoreMember))
+	events = append(events, ep.NewEventRoleMemberUpdated(c.RoleID, c.MemberID, c.Focus, c.NoCoreMember))
 
 	return events, nil
 }
 
-func (r *RolesTree) deleteRoleRecursive(tx *db.Tx, roleID util.ID, skipchilds []util.ID) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) deleteRoleRecursive(tx *db.Tx, roleID util.ID, skipchilds []util.ID) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	role, err := r.role(tx, roleID)
 	if err != nil {
@@ -1119,7 +1120,7 @@ func (r *RolesTree) deleteRoleRecursive(tx *db.Tx, roleID util.ID, skipchilds []
 			return nil, err
 		}
 		for _, roleMemberID := range roleMembersIDs {
-			events = append(events, eventstore.NewEventRoleMemberRemoved(roleID, roleMemberID))
+			events = append(events, ep.NewEventRoleMemberRemoved(roleID, roleMemberID))
 		}
 	}
 
@@ -1130,7 +1131,7 @@ func (r *RolesTree) deleteRoleRecursive(tx *db.Tx, roleID util.ID, skipchilds []
 			return nil, err
 		}
 		for _, circleDirectMemberID := range circleDirectMembersIDs {
-			events = append(events, eventstore.NewEventCircleDirectMemberRemoved(roleID, circleDirectMemberID))
+			events = append(events, ep.NewEventCircleDirectMemberRemoved(roleID, circleDirectMemberID))
 		}
 
 		// Remove circle leadLink member
@@ -1171,23 +1172,23 @@ func (r *RolesTree) deleteRoleRecursive(tx *db.Tx, roleID util.ID, skipchilds []
 
 	// Remove domains from role
 	for _, domain := range domains {
-		events = append(events, eventstore.NewEventRoleDomainDeleted(roleID, domain.ID))
+		events = append(events, ep.NewEventRoleDomainDeleted(roleID, domain.ID))
 	}
 
 	// Remove accountabilities from role
 	for _, accountability := range accountabilities {
-		events = append(events, eventstore.NewEventRoleAccountabilityDeleted(roleID, accountability.ID))
+		events = append(events, ep.NewEventRoleAccountabilityDeleted(roleID, accountability.ID))
 	}
 
 	// First register roleDeleteEvent since its ID will be the causation ID of subsequent events
-	roleDeletedEvent := eventstore.NewEventRoleDeleted(roleID)
+	roleDeletedEvent := ep.NewEventRoleDeleted(roleID)
 	events = append(events, roleDeletedEvent)
 
 	return events, nil
 }
 
-func (r *RolesTree) roleAddCoreRoles(role *models.Role, isRootRole bool) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) roleAddCoreRoles(role *models.Role, isRootRole bool) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	for _, coreRoleDefinition := range models.GetCoreRoles() {
 		coreRole := coreRoleDefinition.Role
@@ -1200,25 +1201,25 @@ func (r *RolesTree) roleAddCoreRoles(role *models.Role, isRootRole bool) ([]even
 		}
 		coreRole.ID = r.uidGenerator.UUID(fmt.Sprintf("%s-%s", role.Name, coreRole.Name))
 
-		events = append(events, eventstore.NewEventRoleCreated(coreRole, &role.ID))
+		events = append(events, ep.NewEventRoleCreated(coreRole, &role.ID))
 
 		domains := coreRoleDefinition.Domains
 		for _, domain := range domains {
 			domain.ID = r.uidGenerator.UUID(fmt.Sprintf("%s-%s-%s", role.Name, coreRole.Name, domain.Description))
-			events = append(events, eventstore.NewEventRoleDomainCreated(coreRole.ID, domain))
+			events = append(events, ep.NewEventRoleDomainCreated(coreRole.ID, domain))
 		}
 		accountabilities := coreRoleDefinition.Accountabilities
 		for _, accountability := range accountabilities {
 			accountability.ID = r.uidGenerator.UUID(fmt.Sprintf("%s-%s-%s", role.Name, coreRole.Name, accountability.Description))
-			events = append(events, eventstore.NewEventRoleAccountabilityCreated(coreRole.ID, accountability))
+			events = append(events, ep.NewEventRoleAccountabilityCreated(coreRole.ID, accountability))
 		}
 	}
 
 	return events, nil
 }
 
-func (r *RolesTree) circleUnsetLeadLinkMember(tx *db.Tx, roleID util.ID) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) circleUnsetLeadLinkMember(tx *db.Tx, roleID util.ID) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	leadLinkRole, err := r.circleCoreRole(tx, roleID, models.RoleTypeLeadLink)
 	if err != nil {
@@ -1234,13 +1235,13 @@ func (r *RolesTree) circleUnsetLeadLinkMember(tx *db.Tx, roleID util.ID) ([]even
 		return nil, nil
 	}
 
-	events = append(events, eventstore.NewEventCircleLeadLinkMemberUnset(roleID, leadLinkRole.ID, leadLinkMemberID[0]))
+	events = append(events, ep.NewEventCircleLeadLinkMemberUnset(roleID, leadLinkRole.ID, leadLinkMemberID[0]))
 
 	return events, nil
 }
 
-func (r *RolesTree) circleUnsetCoreRoleMember(tx *db.Tx, roleType models.RoleType, roleID util.ID) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *RolesTree) circleUnsetCoreRoleMember(tx *db.Tx, roleType models.RoleType, roleID util.ID) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	coreRole, err := r.circleCoreRole(tx, roleID, roleType)
 	if err != nil {
@@ -1256,7 +1257,7 @@ func (r *RolesTree) circleUnsetCoreRoleMember(tx *db.Tx, roleType models.RoleTyp
 		return nil, nil
 	}
 
-	events = append(events, eventstore.NewEventCircleCoreRoleMemberUnset(roleID, coreRole.ID, coreRoleMemberID[0], roleType))
+	events = append(events, ep.NewEventCircleCoreRoleMemberUnset(roleID, coreRole.ID, coreRoleMemberID[0], roleType))
 
 	return events, nil
 }
@@ -1291,16 +1292,16 @@ func (r *RolesTree) ApplyEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 
 	log.Debugf("event: %v", event)
 
-	data, err := event.UnmarshalData()
+	data, err := ep.UnmarshalData(event)
 	if err != nil {
 		return err
 	}
 
 	r.version = event.Version
 
-	switch event.EventType {
-	case eventstore.EventTypeRoleCreated:
-		data := data.(*eventstore.EventRoleCreated)
+	switch ep.EventType(event.EventType) {
+	case ep.EventTypeRoleCreated:
+		data := data.(*ep.EventRoleCreated)
 		role := &models.Role{
 			RoleType: data.RoleType,
 			Name:     data.Name,
@@ -1310,14 +1311,14 @@ func (r *RolesTree) ApplyEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 			return err
 		}
 
-	case eventstore.EventTypeRoleDeleted:
-		data := data.(*eventstore.EventRoleDeleted)
+	case ep.EventTypeRoleDeleted:
+		data := data.(*ep.EventRoleDeleted)
 		if err := r.deleteRole(tx, data.RoleID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeRoleUpdated:
-		data := data.(*eventstore.EventRoleUpdated)
+	case ep.EventTypeRoleUpdated:
+		data := data.(*ep.EventRoleUpdated)
 		role := &models.Role{
 			RoleType: data.RoleType,
 			Name:     data.Name,
@@ -1327,8 +1328,8 @@ func (r *RolesTree) ApplyEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 			return err
 		}
 
-	case eventstore.EventTypeRoleDomainCreated:
-		data := data.(*eventstore.EventRoleDomainCreated)
+	case ep.EventTypeRoleDomainCreated:
+		data := data.(*ep.EventRoleDomainCreated)
 		domainID := data.DomainID
 		domain := &models.Domain{
 			Description: data.Description,
@@ -1337,8 +1338,8 @@ func (r *RolesTree) ApplyEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 			return err
 		}
 
-	case eventstore.EventTypeRoleDomainUpdated:
-		data := data.(*eventstore.EventRoleDomainUpdated)
+	case ep.EventTypeRoleDomainUpdated:
+		data := data.(*ep.EventRoleDomainUpdated)
 		domainID := data.DomainID
 		domain := &models.Domain{
 			Description: data.Description,
@@ -1347,15 +1348,15 @@ func (r *RolesTree) ApplyEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 			return err
 		}
 
-	case eventstore.EventTypeRoleDomainDeleted:
-		data := data.(*eventstore.EventRoleDomainDeleted)
+	case ep.EventTypeRoleDomainDeleted:
+		data := data.(*ep.EventRoleDomainDeleted)
 		domainID := data.DomainID
 		if err := r.deleteDomain(tx, domainID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeRoleAccountabilityCreated:
-		data := data.(*eventstore.EventRoleAccountabilityCreated)
+	case ep.EventTypeRoleAccountabilityCreated:
+		data := data.(*ep.EventRoleAccountabilityCreated)
 		accountabilityID := data.AccountabilityID
 		accountability := &models.Accountability{
 			Description: data.Description,
@@ -1364,8 +1365,8 @@ func (r *RolesTree) ApplyEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 			return err
 		}
 
-	case eventstore.EventTypeRoleAccountabilityUpdated:
-		data := data.(*eventstore.EventRoleAccountabilityUpdated)
+	case ep.EventTypeRoleAccountabilityUpdated:
+		data := data.(*ep.EventRoleAccountabilityUpdated)
 		accountabilityID := data.AccountabilityID
 		accountability := &models.Accountability{
 			Description: data.Description,
@@ -1374,67 +1375,67 @@ func (r *RolesTree) ApplyEvent(tx *db.Tx, event *eventstore.StoredEvent) error {
 			return err
 		}
 
-	case eventstore.EventTypeRoleAccountabilityDeleted:
-		data := data.(*eventstore.EventRoleAccountabilityDeleted)
+	case ep.EventTypeRoleAccountabilityDeleted:
+		data := data.(*ep.EventRoleAccountabilityDeleted)
 		accountabilityID := data.AccountabilityID
 		if err := r.deleteAccountability(tx, accountabilityID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeRoleAdditionalContentSet:
+	case ep.EventTypeRoleAdditionalContentSet:
 
-	case eventstore.EventTypeRoleChangedParent:
-		data := data.(*eventstore.EventRoleChangedParent)
+	case ep.EventTypeRoleChangedParent:
+		data := data.(*ep.EventRoleChangedParent)
 		if err := r.changeRoleParent(tx, data.RoleID, data.ParentRoleID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeRoleMemberAdded:
-		data := data.(*eventstore.EventRoleMemberAdded)
+	case ep.EventTypeRoleMemberAdded:
+		data := data.(*ep.EventRoleMemberAdded)
 		if err := r.roleAddMember(tx, data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeRoleMemberUpdated:
+	case ep.EventTypeRoleMemberUpdated:
 
-	case eventstore.EventTypeRoleMemberRemoved:
-		data := data.(*eventstore.EventRoleMemberRemoved)
+	case ep.EventTypeRoleMemberRemoved:
+		data := data.(*ep.EventRoleMemberRemoved)
 		if err := r.roleRemoveMember(tx, data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeCircleDirectMemberAdded:
-		data := data.(*eventstore.EventCircleDirectMemberAdded)
+	case ep.EventTypeCircleDirectMemberAdded:
+		data := data.(*ep.EventCircleDirectMemberAdded)
 		if err := r.circleAddDirectMember(tx, data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeCircleDirectMemberRemoved:
-		data := data.(*eventstore.EventCircleDirectMemberRemoved)
+	case ep.EventTypeCircleDirectMemberRemoved:
+		data := data.(*ep.EventCircleDirectMemberRemoved)
 		if err := r.circleRemoveDirectMember(tx, data.RoleID, data.MemberID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeCircleLeadLinkMemberSet:
-		data := data.(*eventstore.EventCircleLeadLinkMemberSet)
+	case ep.EventTypeCircleLeadLinkMemberSet:
+		data := data.(*ep.EventCircleLeadLinkMemberSet)
 		if err := r.roleAddMember(tx, data.LeadLinkRoleID, data.MemberID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeCircleLeadLinkMemberUnset:
-		data := data.(*eventstore.EventCircleLeadLinkMemberUnset)
+	case ep.EventTypeCircleLeadLinkMemberUnset:
+		data := data.(*ep.EventCircleLeadLinkMemberUnset)
 		if err := r.roleRemoveMember(tx, data.LeadLinkRoleID, data.MemberID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeCircleCoreRoleMemberSet:
-		data := data.(*eventstore.EventCircleCoreRoleMemberSet)
+	case ep.EventTypeCircleCoreRoleMemberSet:
+		data := data.(*ep.EventCircleCoreRoleMemberSet)
 		if err := r.roleAddMember(tx, data.CoreRoleID, data.MemberID); err != nil {
 			return err
 		}
 
-	case eventstore.EventTypeCircleCoreRoleMemberUnset:
-		data := data.(*eventstore.EventCircleCoreRoleMemberUnset)
+	case ep.EventTypeCircleCoreRoleMemberUnset:
+		data := data.(*ep.EventCircleCoreRoleMemberUnset)
 		if err := r.roleRemoveMember(tx, data.CoreRoleID, data.MemberID); err != nil {
 			return err
 		}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
@@ -59,12 +60,12 @@ func (m *MemberChange) ID() string {
 	return m.id.String()
 }
 
-func (m *MemberChange) AggregateType() eventstore.AggregateType {
-	return eventstore.MemberChangeAggregate
+func (m *MemberChange) AggregateType() AggregateType {
+	return MemberChangeAggregate
 }
 
-func (m *MemberChange) HandleCommand(command *commands.Command) ([]eventstore.Event, error) {
-	var events []eventstore.Event
+func (m *MemberChange) HandleCommand(command *commands.Command) ([]ep.Event, error) {
+	var events []ep.Event
 	var err error
 
 	// skip if already completed
@@ -89,8 +90,8 @@ func (m *MemberChange) HandleCommand(command *commands.Command) ([]eventstore.Ev
 	return events, err
 }
 
-func (m *MemberChange) HandleRequestCreateMemberCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *MemberChange) HandleRequestCreateMemberCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.RequestCreateMember)
 
@@ -102,13 +103,13 @@ func (m *MemberChange) HandleRequestCreateMemberCommand(command *commands.Comman
 	}
 	member.ID = c.MemberID
 
-	events = append(events, eventstore.NewEventMemberChangeCreateRequested(m.id, member, c.MatchUID, c.PasswordHash, c.Avatar))
+	events = append(events, ep.NewEventMemberChangeCreateRequested(m.id, member, c.MatchUID, c.PasswordHash, c.Avatar))
 
 	return events, nil
 }
 
-func (m *MemberChange) HandleRequestUpdateMemberCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *MemberChange) HandleRequestUpdateMemberCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.RequestUpdateMember)
 
@@ -120,27 +121,27 @@ func (m *MemberChange) HandleRequestUpdateMemberCommand(command *commands.Comman
 	}
 	member.ID = c.MemberID
 
-	events = append(events, eventstore.NewEventMemberChangeUpdateRequested(m.id, member, c.Avatar, c.PrevUserName, c.PrevEmail))
+	events = append(events, ep.NewEventMemberChangeUpdateRequested(m.id, member, c.Avatar, c.PrevUserName, c.PrevEmail))
 
 	return events, nil
 }
 
-func (m *MemberChange) HandleRequestSetMemberMatchUIDCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *MemberChange) HandleRequestSetMemberMatchUIDCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.RequestSetMemberMatchUID)
 
-	events = append(events, eventstore.NewEventMemberChangeSetMatchUIDRequested(m.id, c.MemberID, c.MatchUID))
+	events = append(events, ep.NewEventMemberChangeSetMatchUIDRequested(m.id, c.MemberID, c.MatchUID))
 
 	return events, nil
 }
 
-func (m *MemberChange) HandleCompleteRequestCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (m *MemberChange) HandleCompleteRequestCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CompleteRequest)
 
-	events = append(events, eventstore.NewEventMemberChangeCompleted(m.id, c.Error, c.Reason))
+	events = append(events, ep.NewEventMemberChangeCompleted(m.id, c.Error, c.Reason))
 
 	return events, nil
 }
@@ -159,8 +160,8 @@ func (m *MemberChange) ApplyEvent(event *eventstore.StoredEvent) error {
 
 	m.version = event.Version
 
-	switch event.EventType {
-	case eventstore.EventTypeMemberChangeCompleted:
+	switch ep.EventType(event.EventType) {
+	case ep.EventTypeMemberChangeCompleted:
 		m.completed = true
 
 	}

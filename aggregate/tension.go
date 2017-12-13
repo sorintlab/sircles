@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/models"
 	"github.com/sorintlab/sircles/util"
@@ -58,12 +59,12 @@ func (t *Tension) ID() string {
 	return t.id.String()
 }
 
-func (t *Tension) AggregateType() eventstore.AggregateType {
-	return eventstore.TensionAggregate
+func (t *Tension) AggregateType() AggregateType {
+	return TensionAggregate
 }
 
-func (t *Tension) HandleCommand(command *commands.Command) ([]eventstore.Event, error) {
-	var events []eventstore.Event
+func (t *Tension) HandleCommand(command *commands.Command) ([]ep.Event, error) {
+	var events []ep.Event
 	var err error
 	switch command.CommandType {
 	case commands.CommandTypeCreateTension:
@@ -82,8 +83,8 @@ func (t *Tension) HandleCommand(command *commands.Command) ([]eventstore.Event, 
 	return events, err
 }
 
-func (t *Tension) HandleCreateTensionCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (t *Tension) HandleCreateTensionCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CreateTension)
 
@@ -93,13 +94,13 @@ func (t *Tension) HandleCreateTensionCommand(command *commands.Command) ([]event
 	}
 	tension.ID = t.id
 
-	events = append(events, eventstore.NewEventTensionCreated(tension, c.MemberID, c.RoleID))
+	events = append(events, ep.NewEventTensionCreated(tension, c.MemberID, c.RoleID))
 
 	return events, nil
 }
 
-func (t *Tension) HandleUpdateTensionCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (t *Tension) HandleUpdateTensionCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	if !t.created {
 		return nil, errors.New("unexistent tension")
@@ -124,16 +125,16 @@ func (t *Tension) HandleUpdateTensionCommand(command *commands.Command) ([]event
 		roleChanged = true
 	}
 	if roleChanged {
-		events = append(events, eventstore.NewEventTensionRoleChanged(tension.ID, prevRoleID, c.RoleID))
+		events = append(events, ep.NewEventTensionRoleChanged(tension.ID, prevRoleID, c.RoleID))
 	}
 
-	events = append(events, eventstore.NewEventTensionUpdated(tension))
+	events = append(events, ep.NewEventTensionUpdated(tension))
 
 	return events, nil
 }
 
-func (t *Tension) HandleChangeTensionRoleCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (t *Tension) HandleChangeTensionRoleCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.ChangeTensionRole)
 
@@ -147,17 +148,17 @@ func (t *Tension) HandleChangeTensionRoleCommand(command *commands.Command) ([]e
 
 	prevRoleID := t.roleID
 
-	events = append(events, eventstore.NewEventTensionRoleChanged(t.id, prevRoleID, c.RoleID))
+	events = append(events, ep.NewEventTensionRoleChanged(t.id, prevRoleID, c.RoleID))
 
 	return events, nil
 }
 
-func (t *Tension) HandleCloseTensionCommand(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (t *Tension) HandleCloseTensionCommand(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.CloseTension)
 
-	events = append(events, eventstore.NewEventTensionClosed(t.id, c.Reason))
+	events = append(events, ep.NewEventTensionClosed(t.id, c.Reason))
 
 	return events, nil
 }
@@ -174,16 +175,16 @@ func (t *Tension) ApplyEvents(events []*eventstore.StoredEvent) error {
 func (t *Tension) ApplyEvent(event *eventstore.StoredEvent) error {
 	log.Debugf("event: %v", event)
 
-	data, err := event.UnmarshalData()
+	data, err := ep.UnmarshalData(event)
 	if err != nil {
 		return err
 	}
 
 	t.version = event.Version
 
-	switch event.EventType {
-	case eventstore.EventTypeTensionCreated:
-		data := data.(*eventstore.EventTensionCreated)
+	switch ep.EventType(event.EventType) {
+	case ep.EventTypeTensionCreated:
+		data := data.(*ep.EventTensionCreated)
 
 		t.title = data.Title
 		t.description = data.Description
@@ -191,18 +192,18 @@ func (t *Tension) ApplyEvent(event *eventstore.StoredEvent) error {
 
 		t.created = true
 
-	case eventstore.EventTypeTensionUpdated:
-		data := data.(*eventstore.EventTensionUpdated)
+	case ep.EventTypeTensionUpdated:
+		data := data.(*ep.EventTensionUpdated)
 
 		t.title = data.Title
 		t.description = data.Description
 
-	case eventstore.EventTypeTensionRoleChanged:
-		data := data.(*eventstore.EventTensionRoleChanged)
+	case ep.EventTypeTensionRoleChanged:
+		data := data.(*ep.EventTensionRoleChanged)
 
 		t.roleID = data.RoleID
 
-	case eventstore.EventTypeTensionClosed:
+	case ep.EventTypeTensionClosed:
 
 	}
 

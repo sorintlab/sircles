@@ -14,13 +14,13 @@ import (
 func TestWriteEvents(t *testing.T) {
 	events := []*EventData{
 		&EventData{
-			EventType: EventTypeRoleCreated,
+			EventType: "eventtype01",
 		},
 		&EventData{
-			EventType: EventTypeRoleUpdated,
+			EventType: "eventtype01",
 		},
 		&EventData{
-			EventType: EventTypeRoleMemberAdded,
+			EventType: "eventtype01",
 		},
 	}
 
@@ -53,7 +53,7 @@ func TestWriteEvents(t *testing.T) {
 	nf := ln.NewLocalNotifierFactory(localln)
 	es := NewEventStore(db, nf)
 
-	if _, err := es.WriteEvents(events, RolesTreeAggregate.String(), RolesTreeAggregateID.String(), 0); err != nil {
+	if _, err := es.WriteEvents(events, "category01", "b1399c23-5b50-4c72-b803-804efaba0cb1", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func TestWriteEvents(t *testing.T) {
 		t.Fatalf("expected event sequence %d, got %d", expectedSeq, seq)
 	}
 
-	if _, err := es.WriteEvents(events, RolesTreeAggregate.String(), RolesTreeAggregateID.String(), 3); err != nil {
+	if _, err := es.WriteEvents(events, "category01", "b1399c23-5b50-4c72-b803-804efaba0cb1", 3); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -91,7 +91,7 @@ func TestWriteEvents(t *testing.T) {
 
 	// Write events with different version than the current one
 	expectedErr := fmt.Errorf("current version %d different than provided version %d", 6, 5)
-	if _, err := es.WriteEvents(events, RolesTreeAggregate.String(), RolesTreeAggregateID.String(), 5); err == nil {
+	if _, err := es.WriteEvents(events, "category01", "b1399c23-5b50-4c72-b803-804efaba0cb1", 5); err == nil {
 		t.Fatalf("expected error %q, got no error", expectedErr)
 	} else {
 		if err.Error() != expectedErr.Error() {
@@ -103,25 +103,25 @@ func TestWriteEvents(t *testing.T) {
 func TestRestoreEvents(t *testing.T) {
 	events1 := []*EventData{
 		&EventData{
-			EventType: EventTypeRoleCreated,
+			EventType: "eventtype01",
 		},
 		&EventData{
-			EventType: EventTypeRoleUpdated,
+			EventType: "eventtype01",
 		},
 		&EventData{
-			EventType: EventTypeRoleMemberAdded,
+			EventType: "eventtype01",
 		},
 	}
 
 	events2 := []*EventData{
 		&EventData{
-			EventType: EventTypeRoleCreated,
+			EventType: "eventtype01",
 		},
 		&EventData{
-			EventType: EventTypeRoleUpdated,
+			EventType: "eventtype01",
 		},
 		&EventData{
-			EventType: EventTypeRoleMemberAdded,
+			EventType: "eventtype01",
 		},
 	}
 
@@ -154,10 +154,10 @@ func TestRestoreEvents(t *testing.T) {
 	nf := ln.NewLocalNotifierFactory(localln)
 	es := NewEventStore(db1, nf)
 
-	if _, err := es.WriteEvents(events1, RolesTreeAggregate.String(), "b1399c23-5b50-4c72-b803-804efaba0cb1", 0); err != nil {
+	if _, err := es.WriteEvents(events1, "category01", "b1399c23-5b50-4c72-b803-804efaba0cb1", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if _, err := es.WriteEvents(events2, RolesTreeAggregate.String(), "65c4dce5-2935-46eb-a71e-3ea1cb4b970c", 0); err != nil {
+	if _, err := es.WriteEvents(events2, "category01", "65c4dce5-2935-46eb-a71e-3ea1cb4b970c", 0); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
