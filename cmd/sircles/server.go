@@ -11,9 +11,14 @@ import (
 	"github.com/sorintlab/sircles/auth"
 	"github.com/sorintlab/sircles/change"
 	"github.com/sorintlab/sircles/command"
+	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/config"
 	"github.com/sorintlab/sircles/db"
+	"github.com/sorintlab/sircles/eventhandler"
+	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/handlers"
+	ln "github.com/sorintlab/sircles/listennotify"
+	"github.com/sorintlab/sircles/lock"
 	slog "github.com/sorintlab/sircles/log"
 	"github.com/sorintlab/sircles/readdb"
 	"github.com/sorintlab/sircles/search"
@@ -57,7 +62,7 @@ func init() {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		log.Error(err)
 		os.Exit(-1)
 	}
 }
@@ -89,15 +94,44 @@ func serve(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if c.DB.Type == "" {
-		return errors.New("no db type specified")
+	if c.ReadDB.Type == "" {
+		return errors.New("no read db type specified")
 	}
-	switch c.DB.Type {
+
+	if c.EventStore.Type == "" {
+		return errors.New("no eventstore type specified")
+	}
+	if c.EventStore.Type != "sql" {
+		return errors.Errorf("unknown eventstore type: %q", c.EventStore.Type)
+	}
+	if c.EventStore.DB.Type == "" {
+		return errors.New("no eventstore db type specified")
+	}
+
+	switch c.ReadDB.Type {
 	case db.Postgres:
-	case db.CockRoachDB:
 	case db.Sqlite3:
 	default:
-		return errors.Errorf("unsupported db type: %s", c.DB.Type)
+		return errors.Errorf("unsupported read db type: %s", c.ReadDB.Type)
+	}
+
+	switch c.EventStore.DB.Type {
+	case db.Postgres:
+	case db.Sqlite3:
+	default:
+		return errors.Errorf("unsupported eventstore db type: %s", c.EventStore.DB.Type)
+	}
+
+	readDBLnType := getLNtype(&c.ReadDB)
+	esLnType := getLNtype(&c.EventStore.DB)
+
+	readDBLf, readDBNf, err := getListenerNotifierFactories(readDBLnType, &c.ReadDB)
+	if err != nil {
+		return err
+	}
+	esLf, esNf, err := getListenerNotifierFactories(esLnType, &c.EventStore.DB)
+	if err != nil {
+		return err
 	}
 
 	tokenSigningData := &handlers.TokenSigningData{Duration: c.TokenSigning.Duration}
@@ -139,13 +173,28 @@ func serve(cmd *cobra.Command, args []string) error {
 		return errors.Errorf("unknown token signing method: %q", c.TokenSigning.Method)
 	}
 
-	db, err := db.NewDB(c.DB.Type, c.DB.ConnString)
+	readDB, err := db.NewDB(c.ReadDB.Type, c.ReadDB.ConnString)
 	if err != nil {
 		return err
 	}
 
-	// Populate/migrate db
-	if err := db.Migrate(); err != nil {
+	// Populate/migrate readdb
+	if err := readDB.Migrate("readdb", readdb.Migrations); err != nil {
+		return err
+	}
+
+	esDB, err := db.NewDB(c.EventStore.DB.Type, c.EventStore.DB.ConnString)
+	if err != nil {
+		return err
+	}
+
+	// Populate/migrate esdb
+	if err := esDB.Migrate("eventstore", eventstore.Migrations); err != nil {
+		return err
+	}
+
+	lkf, err := getLockFactory(&c.EventStore.DB, esDB)
+	if err != nil {
 		return err
 	}
 
@@ -154,7 +203,7 @@ func serve(cmd *cobra.Command, args []string) error {
 	switch c.Authentication.Type {
 	case "local":
 		authConf := c.Authentication.Config.(*config.LocalAuthConfig)
-		authenticator = auth.NewLocalAuthenticator(authConf, db)
+		authenticator = auth.NewLocalAuthenticator(authConf, readDB)
 	case "ldap":
 		authConf := c.Authentication.Config.(*config.LDAPAuthConfig)
 		authenticator, err = auth.NewLDAPAuthenticator(authConf)
@@ -186,9 +235,8 @@ func serve(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if err := initializeDB(db, c.CreateInitialAdmin); err != nil {
-		return err
-	}
+	readDBListener := readdb.NewDBListener(readDB, readDBLf)
+	es := eventstore.NewEventStore(esDB, esNf)
 
 	resolver := graphqlapi.NewResolver()
 	// Since we are using dataloaders to avoid N+1 queries problem we want to
@@ -198,7 +246,7 @@ func serve(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	searchEngine := search.NewSearchEngine(db, c.Index.Path)
+	searchEngine := search.NewSearchEngine(readDB, es, c.Index.Path)
 
 	// noop coors handler
 	corsHandler := func(h http.Handler) http.Handler {
@@ -211,11 +259,22 @@ func serve(cmd *cobra.Command, args []string) error {
 		corsHandler = ghandlers.CORS(corsAllowedHeadersOptions, corsAllowedOriginsOptions)
 	}
 
-	loginHandler := handlers.NewLoginHandler(c, db, authenticator, memberProvider, tokenSigningData)
+	// For the moment, create a different temporary dataDir for every
+	// new process execution.
+	// This will trigger the rebuild from scratch, when loaded, of the
+	// aggregates/handlers snapshot db (rolestree aggregate, deletedroletension
+	// handler).
+	dataDir, err := ioutil.TempDir("", "")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dataDir)
+
+	loginHandler := handlers.NewLoginHandler(c, dataDir, readDB, es, esLf, authenticator, memberProvider, tokenSigningData)
 	refreshTokenHandler := handlers.NewRefreshTokenHandler(tokenSigningData)
 	oidcAuthURLHandler := handlers.NewOIDCAuthURLHandler(authenticator)
-	graphqlHandler := handlers.NewGraphQLHandler(c, db, searchEngine, s, memberProvider)
-	authHandler := handlers.NewAuthHandler(db, tokenSigningData)
+	graphqlHandler := handlers.NewGraphQLHandler(c, dataDir, readDB, readDBListener, es, esLf, searchEngine, s, memberProvider)
+	authHandler := handlers.NewAuthHandler(readDB, tokenSigningData)
 
 	router := mux.NewRouter()
 	apirouter := router.PathPrefix("/api/").Subrouter()
@@ -228,7 +287,7 @@ func serve(cmd *cobra.Command, args []string) error {
 	// protect them because the browser img src cannot send the auth token. If
 	// protecting the avatar becomes important there's the need to find a way on
 	// how to do this.
-	apirouter.Handle("/avatar/{memberuid}", handlers.NewAvatarHandler(db))
+	apirouter.Handle("/avatar/{memberuid}", handlers.NewAvatarHandler(readDB))
 
 	// Setup serving of bundled webapp from the root path, registered after api
 	// handlers or it'll match all the requested paths
@@ -257,35 +316,52 @@ func serve(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
+	stop := make(chan struct{})
+	endChs := []chan struct{}{}
+
+	readDBh := readdb.NewDBEventHandler(readDB, es, readDBNf)
+	mrh := eventhandler.NewMemberRequestHandler(es, &common.DefaultUidGenerator{})
+	drth, err := eventhandler.NewDeletedRoleTensionHandler(dataDir, es, &common.DefaultUidGenerator{})
+	if err != nil {
+		return err
+	}
+
+	for _, h := range []eventhandler.EventHandler{readDBh, mrh, drth} {
+		endCh, err := eventhandler.RunEventHandler(h, stop, esLf, lkf)
+		if err != nil {
+			return err
+		}
+		endChs = append(endChs, endCh)
+	}
+
+	if err := initializeSircles(dataDir, readDB, es, readDBLf, esLf, c.CreateInitialAdmin); err != nil {
+		return err
+	}
+
 	return <-listenErrChan
 }
 
-func initializeDB(db *db.DB, createInitialAdmin bool) error {
-	tx, err := db.NewTx()
+func initializeSircles(dataDir string, readDB *db.DB, es *eventstore.EventStore, readDBLf, esLf ln.ListenerFactory, createInitialAdmin bool) error {
+	events, err := es.GetAllEvents(0, 1)
 	if err != nil {
 		return err
 	}
-	if err := doInit(tx, createInitialAdmin); err != nil {
-		tx.Rollback()
-		return err
-	}
-	return tx.Commit()
-}
-
-func doInit(tx *db.Tx, createInitialAdmin bool) error {
-	readDBService, err := readdb.NewReadDBService(tx)
-	if err != nil {
-		return err
-	}
-	commandService := command.NewCommandService(tx, readDBService, nil, nil, false)
-
 	ctx := context.Background()
-	if !readDBService.CurTimeLine(ctx).IsZero() {
+	// initialize only if the eventstore is empty
+	if len(events) > 0 {
 		return nil
 	}
 
-	_, err = commandService.SetupRootRole()
+	commandService := command.NewCommandService(dataDir, readDB, es, nil, esLf, false)
+
+	readDBListener := readdb.NewDBListener(readDB, readDBLf)
+
+	_, groupID, err := commandService.SetupRootRole()
 	if err != nil {
+		return err
+	}
+
+	if _, err := readDBListener.WaitTimeLineForGroupID(ctx, groupID); err != nil {
 		return err
 	}
 
@@ -298,11 +374,54 @@ func doInit(tx *db.Tx, createInitialAdmin bool) error {
 			Password: "password",
 		}
 
-		ctx := context.Background()
 		if _, _, err := commandService.CreateMemberInternal(ctx, c, false, false); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func getLNtype(dbConfig *config.DB) ln.Type {
+	var lnType ln.Type
+	switch dbConfig.Type {
+	case db.Postgres:
+		lnType = ln.Postgres
+	case db.Sqlite3:
+		lnType = ln.Local
+	default:
+		panic(errors.Errorf("unsupported db type: %s", dbConfig.Type))
+	}
+	return lnType
+}
+
+func getListenerNotifierFactories(lnType ln.Type, dbConfig *config.DB) (ln.ListenerFactory, ln.NotifierFactory, error) {
+	var lf ln.ListenerFactory
+	var nf ln.NotifierFactory
+	switch lnType {
+	case ln.Local:
+		localln := ln.NewLocalListenNotify()
+		lf = ln.NewLocalListenerFactory(localln)
+		nf = ln.NewLocalNotifierFactory(localln)
+	case ln.Postgres:
+		lf = ln.NewPGListenerFactory(dbConfig.ConnString)
+		nf = ln.NewPGNotifierFactory()
+	default:
+		return nil, nil, errors.Errorf("unknown listener type: %q", lnType)
+	}
+	return lf, nf, nil
+}
+
+func getLockFactory(dbConfig *config.DB, d *db.DB) (lock.LockFactory, error) {
+	var lkf lock.LockFactory
+	switch dbConfig.Type {
+	case db.Postgres:
+		lkf = lock.NewPGLockFactory(common.EventHandlersLockSpace, d)
+	case db.Sqlite3:
+		locallocks := lock.NewLocalLocks()
+		lkf = lock.NewLocalLockFactory(locallocks)
+	default:
+		return nil, errors.Errorf("unknown db type: %q", dbConfig.Type)
+	}
+	return lkf, nil
 }

@@ -24,7 +24,7 @@ const (
 	Postgres    Type = "postgres"
 	CockRoachDB Type = "cockroachdb"
 
-	maxTxRetries = 30
+	maxTxRetries = 120
 )
 
 type dbData struct {
@@ -201,7 +201,7 @@ func (db *DB) Do(f func(tx *Tx) error) error {
 			if sqerr.Code == sqlite3.ErrBusy {
 				retries++
 				if retries < maxTxRetries {
-					time.Sleep(time.Duration(retries%10) * time.Millisecond)
+					time.Sleep(time.Duration(retries%30) * time.Millisecond)
 					continue
 				}
 			}
@@ -235,7 +235,7 @@ func (tx *Tx) Start() error {
 	}
 	switch tx.db.data.t {
 	case Postgres:
-		if _, err := wtx.Exec("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE"); err != nil {
+		if _, err := wtx.Exec("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"); err != nil {
 			return errors.WithStack(err)
 		}
 	}

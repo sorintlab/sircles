@@ -192,7 +192,6 @@ type CreateMemberChangeErrors struct {
 type UpdateMemberChange struct {
 	ID         util.ID
 	IsAdmin    bool
-	MatchUID   string
 	UserName   string
 	FullName   string
 	Email      string
@@ -207,7 +206,6 @@ type UpdateMemberResult struct {
 
 type UpdateMemberChangeErrors struct {
 	IsAdmin    error
-	MatchUID   error
 	UserName   error
 	FullName   error
 	Email      error

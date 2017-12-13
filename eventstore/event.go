@@ -16,6 +16,8 @@ var (
 	SircleUUIDNamespace, _ = uuid.FromString("6c4a36ae-1f5c-11e7-93ae-92361f002671")
 
 	RolesTreeAggregateID = util.NewFromUUID(uuid.NewV5(SircleUUIDNamespace, string(RolesTreeAggregate)))
+
+	MemberRequestHandlerID = util.NewFromUUID(uuid.NewV5(SircleUUIDNamespace, string(MemberRequestHandlerAggregate)))
 )
 
 type StoredEvent struct {
@@ -122,18 +124,24 @@ const (
 	RolesTreeAggregate AggregateType = "rolestree"
 	MemberAggregate    AggregateType = "member"
 	TensionAggregate   AggregateType = "tension"
+
+	MemberChangeAggregate         AggregateType = "memberchange"
+	MemberRequestHandlerAggregate AggregateType = "memberrequesthandler"
+	MemberRequestSagaAggregate    AggregateType = "memberrequestsaga"
+
+	UniqueValueRegistryAggregate AggregateType = "uniquevalueregistry"
 )
 
 // EventType is an event triggered by a command
 type EventType string
 
 const (
-	// RolesTree Root Aggregate
+	// RolesTree Aggregate
 	// If we want to have transactional consistency between the roles and the
 	// hierarchy (to achieve ui transactional commands like update role that
-	// want to both update a role data and move role from/to it) the simplest
-	// way is to make the hierarchy and all it's roles as a single aggregate
-	// root.
+	// want to transactionally update a role data and move role from/to it) the
+	// simplest way is to make the hierarchy and all its roles as a single
+	// aggregate.
 	EventTypeRoleCreated EventType = "RoleCreated"
 	EventTypeRoleUpdated EventType = "RoleUpdated"
 	EventTypeRoleDeleted EventType = "RoleDeleted"
@@ -163,7 +171,13 @@ const (
 	EventTypeCircleCoreRoleMemberSet   EventType = "CircleCoreRoleMemberSet"
 	EventTypeCircleCoreRoleMemberUnset EventType = "CircleCoreRoleMemberUnset"
 
-	// Member Root Aggregate
+	// MemberChange Aggregate
+	EventTypeMemberChangeCreateRequested      EventType = "MemberChangeCreateRequested"
+	EventTypeMemberChangeUpdateRequested      EventType = "MemberChangeUpdateRequested"
+	EventTypeMemberChangeSetMatchUIDRequested EventType = "MemberChangeSetMatchUIDRequested"
+	EventTypeMemberChangeCompleted            EventType = "MemberChangeCompleted"
+
+	// Member Aggregate
 	EventTypeMemberCreated     EventType = "MemberCreated"
 	EventTypeMemberUpdated     EventType = "MemberUpdated"
 	EventTypeMemberDeleted     EventType = "MemberDeleted"
@@ -171,11 +185,20 @@ const (
 	EventTypeMemberAvatarSet   EventType = "MemberAvatarSet"
 	EventTypeMemberMatchUIDSet EventType = "MemberMatchUIDSet"
 
-	// Tension Root Aggregate
+	// Tension Aggregate
 	EventTypeTensionCreated     EventType = "TensionCreated"
 	EventTypeTensionUpdated     EventType = "TensionUpdated"
 	EventTypeTensionRoleChanged EventType = "TensionRoleChanged"
 	EventTypeTensionClosed      EventType = "TensionClosed"
+
+	EventTypeMemberRequestHandlerStateUpdated EventType = "MemberRequestHandlerStateUpdated"
+
+	// MemberRequest Saga
+	EventTypeMemberRequestSagaCompleted EventType = "MemberRequestSagaCompleted"
+
+	// UniqueValueRegistry Aggregate
+	EventTypeUniqueRegistryValueReserved EventType = "UniqueRegistryValueReserved"
+	EventTypeUniqueRegistryValueReleased EventType = "UniqueRegistryValueReleased"
 )
 
 func GetEventDataType(eventType EventType) interface{} {
@@ -229,6 +252,15 @@ func GetEventDataType(eventType EventType) interface{} {
 	case EventTypeCircleCoreRoleMemberUnset:
 		return &EventCircleCoreRoleMemberUnset{}
 
+	case EventTypeMemberChangeCreateRequested:
+		return &EventMemberChangeCreateRequested{}
+	case EventTypeMemberChangeUpdateRequested:
+		return &EventMemberChangeUpdateRequested{}
+	case EventTypeMemberChangeSetMatchUIDRequested:
+		return &EventMemberChangeSetMatchUIDRequested{}
+	case EventTypeMemberChangeCompleted:
+		return &EventMemberChangeCompleted{}
+
 	case EventTypeMemberCreated:
 		return &EventMemberCreated{}
 	case EventTypeMemberUpdated:
@@ -248,6 +280,18 @@ func GetEventDataType(eventType EventType) interface{} {
 		return &EventTensionRoleChanged{}
 	case EventTypeTensionClosed:
 		return &EventTensionClosed{}
+
+	case EventTypeMemberRequestHandlerStateUpdated:
+		return &EventMemberRequestHandlerStateUpdated{}
+
+	case EventTypeMemberRequestSagaCompleted:
+		return &EventMemberRequestSagaCompleted{}
+
+	case EventTypeUniqueRegistryValueReserved:
+		return &EventUniqueRegistryValueReserved{}
+	case EventTypeUniqueRegistryValueReleased:
+		return &EventUniqueRegistryValueReleased{}
+
 	default:
 		panic(fmt.Errorf("unknown event type: %q", eventType))
 	}
@@ -434,10 +478,10 @@ type EventRoleAdditionalContentSet struct {
 	Content string
 }
 
-func NewEventRoleAdditionalContentSet(roleID util.ID, roleAdditionalContent *models.RoleAdditionalContent) *EventRoleAdditionalContentSet {
+func NewEventRoleAdditionalContentSet(roleID util.ID, content string) *EventRoleAdditionalContentSet {
 	return &EventRoleAdditionalContentSet{
 		RoleID:  roleID,
-		Content: roleAdditionalContent.Content,
+		Content: content,
 	}
 }
 
@@ -689,19 +733,111 @@ func (e *EventTensionClosed) EventType() EventType {
 	return EventTypeTensionClosed
 }
 
+type EventMemberChangeCreateRequested struct {
+	MemberID     util.ID
+	IsAdmin      bool
+	MatchUID     string
+	UserName     string
+	FullName     string
+	Email        string
+	PasswordHash string
+	Avatar       []byte
+}
+
+func NewEventMemberChangeCreateRequested(memberChangeID util.ID, member *models.Member, matchUID, passwordHash string, avatar []byte) *EventMemberChangeCreateRequested {
+	return &EventMemberChangeCreateRequested{
+		MemberID:     member.ID,
+		IsAdmin:      member.IsAdmin,
+		MatchUID:     matchUID,
+		UserName:     member.UserName,
+		FullName:     member.FullName,
+		Email:        member.Email,
+		PasswordHash: passwordHash,
+		Avatar:       avatar,
+	}
+}
+
+func (e *EventMemberChangeCreateRequested) EventType() EventType {
+	return EventTypeMemberChangeCreateRequested
+}
+
+type EventMemberChangeUpdateRequested struct {
+	MemberID util.ID
+	IsAdmin  bool
+	UserName string
+	FullName string
+	Email    string
+	Avatar   []byte
+
+	PrevUserName string
+	PrevEmail    string
+}
+
+func NewEventMemberChangeUpdateRequested(memberChangeID util.ID, member *models.Member, avatar []byte, prevUserName, prevEmail string) *EventMemberChangeUpdateRequested {
+	return &EventMemberChangeUpdateRequested{
+		MemberID:     member.ID,
+		IsAdmin:      member.IsAdmin,
+		UserName:     member.UserName,
+		FullName:     member.FullName,
+		Email:        member.Email,
+		Avatar:       avatar,
+		PrevUserName: prevUserName,
+		PrevEmail:    prevEmail,
+	}
+}
+
+func (e *EventMemberChangeUpdateRequested) EventType() EventType {
+	return EventTypeMemberChangeUpdateRequested
+}
+
+type EventMemberChangeSetMatchUIDRequested struct {
+	MemberID util.ID
+	MatchUID string
+}
+
+func NewEventMemberChangeSetMatchUIDRequested(memberChangeID util.ID, memberID util.ID, matchUID string) *EventMemberChangeSetMatchUIDRequested {
+	return &EventMemberChangeSetMatchUIDRequested{
+		MemberID: memberID,
+		MatchUID: matchUID,
+	}
+}
+
+func (e *EventMemberChangeSetMatchUIDRequested) EventType() EventType {
+	return EventTypeMemberChangeSetMatchUIDRequested
+}
+
+type EventMemberChangeCompleted struct {
+	Error  bool
+	Reason string
+}
+
+func NewEventMemberChangeCompleted(memberChangeID util.ID, err bool, reason string) *EventMemberChangeCompleted {
+	return &EventMemberChangeCompleted{
+		Error:  err,
+		Reason: reason,
+	}
+}
+
+func (e *EventMemberChangeCompleted) EventType() EventType {
+	return EventTypeMemberChangeCompleted
+}
+
 type EventMemberCreated struct {
 	IsAdmin  bool
 	UserName string
 	FullName string
 	Email    string
+
+	MemberChangeID util.ID
 }
 
-func NewEventMemberCreated(member *models.Member) *EventMemberCreated {
+func NewEventMemberCreated(member *models.Member, memberChangeID util.ID) *EventMemberCreated {
 	return &EventMemberCreated{
-		IsAdmin:  member.IsAdmin,
-		UserName: member.UserName,
-		FullName: member.FullName,
-		Email:    member.Email,
+		IsAdmin:        member.IsAdmin,
+		UserName:       member.UserName,
+		FullName:       member.FullName,
+		Email:          member.Email,
+		MemberChangeID: memberChangeID,
 	}
 }
 
@@ -714,14 +850,22 @@ type EventMemberUpdated struct {
 	UserName string
 	FullName string
 	Email    string
+
+	MemberChangeID util.ID
+
+	PrevUserName string
+	PrevEmail    string
 }
 
-func NewEventMemberUpdated(member *models.Member) *EventMemberUpdated {
+func NewEventMemberUpdated(member *models.Member, memberChangeID util.ID, prevUserName, prevEmail string) *EventMemberUpdated {
 	return &EventMemberUpdated{
-		IsAdmin:  member.IsAdmin,
-		UserName: member.UserName,
-		FullName: member.FullName,
-		Email:    member.Email,
+		IsAdmin:        member.IsAdmin,
+		UserName:       member.UserName,
+		FullName:       member.FullName,
+		Email:          member.Email,
+		MemberChangeID: memberChangeID,
+		PrevUserName:   prevUserName,
+		PrevEmail:      prevEmail,
 	}
 }
 
@@ -759,9 +903,13 @@ func (e *EventMemberAvatarSet) EventType() EventType {
 
 type EventMemberMatchUIDSet struct {
 	MatchUID string
+
+	MemberChangeID util.ID
+
+	PrevMatchUID string
 }
 
-func NewEventMemberMatchUIDSet(memberID util.ID, matchUID string) *EventMemberMatchUIDSet {
+func NewEventMemberMatchUIDSet(memberID util.ID, memberChangeID util.ID, matchUID, prevMatchUID string) *EventMemberMatchUIDSet {
 	return &EventMemberMatchUIDSet{
 		MatchUID: matchUID,
 	}
@@ -769,4 +917,66 @@ func NewEventMemberMatchUIDSet(memberID util.ID, matchUID string) *EventMemberMa
 
 func (e *EventMemberMatchUIDSet) EventType() EventType {
 	return EventTypeMemberMatchUIDSet
+}
+
+type EventMemberRequestHandlerStateUpdated struct {
+	MemberChangeSequenceNumber int64
+	MemberSequenceNumber       int64
+}
+
+func NewEventMemberRequestHandlerStateUpdated(memberChangeSequenceNumber, memberSequenceNumber int64) *EventMemberRequestHandlerStateUpdated {
+	return &EventMemberRequestHandlerStateUpdated{
+		MemberChangeSequenceNumber: memberChangeSequenceNumber,
+		MemberSequenceNumber:       memberSequenceNumber,
+	}
+}
+
+func (e *EventMemberRequestHandlerStateUpdated) EventType() EventType {
+	return EventTypeMemberRequestHandlerStateUpdated
+}
+
+type EventMemberRequestSagaCompleted struct{}
+
+func NewEventMemberRequestSagaCompleted(sagaID string) *EventMemberRequestSagaCompleted {
+	return &EventMemberRequestSagaCompleted{}
+}
+
+func (e *EventMemberRequestSagaCompleted) EventType() EventType {
+	return EventTypeMemberRequestSagaCompleted
+}
+
+type EventUniqueRegistryValueReserved struct {
+	ID        util.ID
+	Value     string
+	RequestID util.ID
+}
+
+func NewEventUniqueRegistryValueReserved(registryID string, value string, id, requestID util.ID) *EventUniqueRegistryValueReserved {
+	return &EventUniqueRegistryValueReserved{
+		Value:     value,
+		ID:        id,
+		RequestID: requestID,
+	}
+}
+
+func (e *EventUniqueRegistryValueReserved) EventType() EventType {
+	return EventTypeUniqueRegistryValueReserved
+}
+
+type EventUniqueRegistryValueReleased struct {
+	ID        util.ID
+	Value     string
+	RequestID util.ID
+}
+
+func NewEventUniqueRegistryValueReleased(registryID string, value string, id, requestID util.ID) *EventUniqueRegistryValueReleased {
+	return &EventUniqueRegistryValueReleased{
+		Value:     value,
+		ID:        id,
+		RequestID: requestID,
+	}
+}
+
+func (e *EventUniqueRegistryValueReleased) EventType() EventType {
+	return EventTypeUniqueRegistryValueReleased
 }

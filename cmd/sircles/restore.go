@@ -9,7 +9,6 @@ import (
 	"github.com/sorintlab/sircles/db"
 	"github.com/sorintlab/sircles/eventstore"
 	slog "github.com/sorintlab/sircles/log"
-	"github.com/sorintlab/sircles/readdb"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -53,38 +52,37 @@ func restore(cmd *cobra.Command, args []string) error {
 		slog.SetLevel(zapcore.DebugLevel)
 	}
 
-	if c.DB.Type == "" {
-		return errors.New("no db type specified")
+	if c.EventStore.Type == "" {
+		return errors.New("no eventstore type specified")
 	}
-	switch c.DB.Type {
+	if c.EventStore.Type != "sql" {
+		return errors.Errorf("unknown eventstore type: %q", c.EventStore.Type)
+	}
+	if c.EventStore.DB.Type == "" {
+		return errors.New("no eventstore db type specified")
+	}
+
+	switch c.EventStore.DB.Type {
 	case db.Postgres:
-	case db.CockRoachDB:
 	case db.Sqlite3:
 	default:
-		return errors.Errorf("unsupported db type: %s", c.DB.Type)
+		return errors.Errorf("unsupported eventstore db type: %s", c.EventStore.DB.Type)
 	}
 
-	db, err := db.NewDB(c.DB.Type, c.DB.ConnString)
+	esLnType := getLNtype(&c.EventStore.DB)
+	_, esNf, err := getListenerNotifierFactories(esLnType, &c.EventStore.DB)
+
+	esDB, err := db.NewDB(c.EventStore.DB.Type, c.EventStore.DB.ConnString)
 	if err != nil {
 		return err
 	}
 
-	// Populate/migrate db
-	if err := db.Migrate(); err != nil {
+	// Populate/migrate esdb
+	if err := esDB.Migrate("eventstore", eventstore.Migrations); err != nil {
 		return err
 	}
 
-	tx, err := db.NewTx()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-			return
-		}
-		tx.Commit()
-	}()
+	es := eventstore.NewEventStore(esDB, esNf)
 
 	f, err := os.Open(dumpFile)
 	if err != nil {
@@ -98,14 +96,14 @@ func restore(cmd *cobra.Command, args []string) error {
 		var event *eventstore.StoredEvent
 		err := dec.Decode(&event)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		events = append(events, event)
 
 		hasMore := dec.More()
 		if len(events) >= restoreBatchSize || !hasMore {
-			if err := applyEvents(db, events); err != nil {
+			if err := es.RestoreEvents(events); err != nil {
 				return err
 			}
 			events = []*eventstore.StoredEvent{}
@@ -115,34 +113,5 @@ func restore(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	return nil
-}
-
-func applyEvents(db *db.DB, events []*eventstore.StoredEvent) error {
-	tx, err := db.NewTx()
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-			return
-		}
-		tx.Commit()
-	}()
-
-	es := eventstore.NewEventStore(tx)
-
-	readDBService, err := readdb.NewReadDBService(tx)
-	if err != nil {
-		return err
-	}
-	if err := es.RestoreEvents(events); err != nil {
-		return err
-	}
-	if err := readDBService.ApplyEvents(events); err != nil {
-		return err
-	}
 	return nil
 }

@@ -3,11 +3,17 @@
 web:
   http: ':8080'
 
-db:
+readdb:
   # the database type (postgres or sqlite3), use postgres for production and
   # sqlite only for test
   type: 'sqlite3'
-  connString: '/sircles.db'
+  connString: '/readdb.db'
+
+eventStore:
+  type: 'sql'
+  db:
+    type: 'sqlite3'
+    connString: '/eventstore.db'
 
 # how the jwt token issued on login should be signed, preferred
 tokenSigning:
@@ -24,5 +30,5 @@ authentication:
 
 # type can be: local, ldap, oidc
   type: local
-    # the user should provided the email instead of the username for authentication
+    # the user should provide the email instead of the username for authentication
     #useEmail: true
