@@ -12,6 +12,7 @@ import (
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
 	"github.com/sorintlab/sircles/db"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	ln "github.com/sorintlab/sircles/listennotify"
 	slog "github.com/sorintlab/sircles/log"
@@ -219,7 +220,7 @@ func (s *CommandService) UpdateRootRole(ctx context.Context, c *change.UpdateRoo
 	command := commands.NewCommand(commands.CommandTypeUpdateRootRole, correlationID, causationID, callingMember.ID, &commands.UpdateRootRole{UpdateRootRoleChange: *c})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -332,7 +333,7 @@ func (s *CommandService) CircleCreateChildRole(ctx context.Context, roleID util.
 	command := commands.NewCommand(commands.CommandTypeCircleCreateChildRole, correlationID, causationID, callingMember.ID, &commands.CircleCreateChildRole{RoleID: roleID, NewRoleID: newRoleID, CreateRoleChange: *c})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -488,7 +489,7 @@ func (s *CommandService) CircleUpdateChildRole(ctx context.Context, roleID util.
 	command := commands.NewCommand(commands.CommandTypeCircleUpdateChildRole, correlationID, causationID, callingMember.ID, &commands.CircleUpdateChildRole{RoleID: roleID, UpdateRoleChange: *c})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -601,7 +602,7 @@ func (s *CommandService) CircleDeleteChildRole(ctx context.Context, roleID util.
 	command := commands.NewCommand(commands.CommandTypeCircleDeleteChildRole, correlationID, causationID, callingMember.ID, &commands.CircleDeleteChildRole{RoleID: roleID, DeleteRoleChange: *c})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -670,7 +671,7 @@ func (s *CommandService) SetRoleAdditionalContent(ctx context.Context, roleID ut
 	command := commands.NewCommand(commands.CommandTypeSetRoleAdditionalContent, correlationID, causationID, callingMember.ID, &commands.SetRoleAdditionalContent{RoleID: roleID, Content: content})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return nil, util.NilID, err
 	}
@@ -1565,7 +1566,7 @@ func (s *CommandService) CircleAddDirectMember(ctx context.Context, roleID util.
 	command := commands.NewCommand(commands.CommandTypeCircleAddDirectMember, correlationID, causationID, callingMember.ID, &commands.CircleAddDirectMember{RoleID: roleID, MemberID: memberID})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -1640,7 +1641,7 @@ func (s *CommandService) CircleRemoveDirectMember(ctx context.Context, roleID ut
 	command := commands.NewCommand(commands.CommandTypeCircleRemoveDirectMember, correlationID, causationID, callingMember.ID, &commands.CircleRemoveDirectMember{RoleID: roleID, MemberID: memberID})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -1732,7 +1733,7 @@ func (s *CommandService) CircleSetLeadLinkMember(ctx context.Context, roleID, me
 	command := commands.NewCommand(commands.CommandTypeCircleSetLeadLinkMember, correlationID, causationID, callingMember.ID, &commands.CircleSetLeadLinkMember{RoleID: roleID, MemberID: memberID})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -1831,7 +1832,7 @@ func (s *CommandService) CircleUnsetLeadLinkMember(ctx context.Context, roleID u
 	command := commands.NewCommand(commands.CommandTypeCircleUnsetLeadLinkMember, correlationID, causationID, callingMember.ID, &commands.CircleUnsetLeadLinkMember{RoleID: roleID})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -1902,7 +1903,7 @@ func (s *CommandService) CircleSetCoreRoleMember(ctx context.Context, roleType m
 	command := commands.NewCommand(commands.CommandTypeCircleSetCoreRoleMember, correlationID, causationID, callingMember.ID, &commands.CircleSetCoreRoleMember{RoleType: roleType, RoleID: roleID, MemberID: memberID, ElectionExpiration: electionExpiration})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -1981,7 +1982,7 @@ func (s *CommandService) CircleUnsetCoreRoleMember(ctx context.Context, roleType
 	command := commands.NewCommand(commands.CommandTypeCircleUnsetCoreRoleMember, correlationID, causationID, callingMember.ID, &commands.CircleUnsetCoreRoleMember{RoleType: roleType, RoleID: roleID})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -2076,7 +2077,7 @@ func (s *CommandService) RoleAddMember(ctx context.Context, roleID util.ID, memb
 	command := commands.NewCommand(commands.CommandTypeRoleAddMember, correlationID, causationID, callingMember.ID, &commands.RoleAddMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -2158,7 +2159,7 @@ func (s *CommandService) RoleRemoveMember(ctx context.Context, roleID util.ID, m
 	command := commands.NewCommand(commands.CommandTypeRoleRemoveMember, correlationID, causationID, callingMember.ID, &commands.RoleRemoveMember{RoleID: roleID, MemberID: memberID})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -2249,7 +2250,7 @@ func (s *CommandService) RoleUpdateMember(ctx context.Context, roleID util.ID, m
 	command := commands.NewCommand(commands.CommandTypeRoleUpdateMember, correlationID, causationID, callingMember.ID, &commands.RoleUpdateMember{RoleID: roleID, MemberID: memberID, Focus: focus, NoCoreMember: noCoreMember})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return res, util.NilID, err
 	}
@@ -2270,7 +2271,7 @@ func (s *CommandService) SetupRootRole() (util.ID, util.ID, error) {
 	command := commands.NewCommand(commands.CommandTypeSetupRootRole, correlationID, causationID, util.NilID, &commands.SetupRootRole{RootRoleID: rootRoleID, Name: "General"})
 
 	rtr := aggregate.NewRolesTreeRepository(s.dataDir, s.es, s.uidGenerator)
-	rt, err := rtr.Load(eventstore.RolesTreeAggregateID)
+	rt, err := rtr.Load(aggregate.RolesTreeAggregateID)
 	if err != nil {
 		return util.NilID, util.NilID, err
 	}
@@ -2308,17 +2309,17 @@ func (s *CommandService) waitMemberChangeRequest(ctx context.Context, memberChan
 			v = events[len(events)-1].Version
 
 			for _, e := range events {
-				data, err := e.UnmarshalData()
+				data, err := ep.UnmarshalData(e)
 				if err != nil {
 					return util.NilID, err
 				}
-				metaData, err := e.UnmarshalMetaData()
+				metaData, err := ep.UnmarshalMetaData(e)
 				if err != nil {
 					return util.NilID, err
 				}
 
-				if e.EventType == eventstore.EventTypeMemberChangeCompleted {
-					data := data.(*eventstore.EventMemberChangeCompleted)
+				if ep.EventType(e.EventType) == ep.EventTypeMemberChangeCompleted {
+					data := data.(*ep.EventMemberChangeCompleted)
 					if data.Error {
 						rerr = errors.New(data.Reason)
 						log.Debugf("request completed with error: %v", rerr)

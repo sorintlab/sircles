@@ -5,6 +5,7 @@ import (
 
 	"github.com/sorintlab/sircles/command/commands"
 	"github.com/sorintlab/sircles/common"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/util"
 )
@@ -64,12 +65,12 @@ func (r *UniqueValueRegistry) ID() string {
 	return r.id
 }
 
-func (r *UniqueValueRegistry) AggregateType() eventstore.AggregateType {
-	return eventstore.UniqueValueRegistryAggregate
+func (r *UniqueValueRegistry) AggregateType() AggregateType {
+	return UniqueValueRegistryAggregate
 }
 
-func (r *UniqueValueRegistry) HandleCommand(command *commands.Command) ([]eventstore.Event, error) {
-	var events []eventstore.Event
+func (r *UniqueValueRegistry) HandleCommand(command *commands.Command) ([]ep.Event, error) {
+	var events []ep.Event
 	var err error
 	switch command.CommandType {
 	case commands.CommandTypeReserveValue:
@@ -84,8 +85,8 @@ func (r *UniqueValueRegistry) HandleCommand(command *commands.Command) ([]events
 	return events, err
 }
 
-func (r *UniqueValueRegistry) HandleReserveValue(command *commands.Command) ([]eventstore.Event, error) {
-	events := []eventstore.Event{}
+func (r *UniqueValueRegistry) HandleReserveValue(command *commands.Command) ([]ep.Event, error) {
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.ReserveValue)
 
@@ -100,14 +101,14 @@ func (r *UniqueValueRegistry) HandleReserveValue(command *commands.Command) ([]e
 		return nil, fmt.Errorf("value %s already reserved to id: %s", c.Value, id)
 	}
 
-	events = append(events, eventstore.NewEventUniqueRegistryValueReserved(r.id, c.Value, c.ID, c.RequestID))
+	events = append(events, ep.NewEventUniqueRegistryValueReserved(r.id, c.Value, c.ID, c.RequestID))
 
 	return events, nil
 }
 
-func (r *UniqueValueRegistry) HandleReleaseValue(command *commands.Command) ([]eventstore.Event, error) {
+func (r *UniqueValueRegistry) HandleReleaseValue(command *commands.Command) ([]ep.Event, error) {
 	log.Debugf("HandleReleaseValue")
-	events := []eventstore.Event{}
+	events := []ep.Event{}
 
 	c := command.Data.(*commands.ReleaseValue)
 
@@ -118,7 +119,7 @@ func (r *UniqueValueRegistry) HandleReleaseValue(command *commands.Command) ([]e
 	if id, ok := r.values[c.Value]; ok {
 		log.Debugf("value: %s, id: %s", c.Value, id)
 		if id == c.ID {
-			events = append(events, eventstore.NewEventUniqueRegistryValueReleased(r.id, c.Value, c.ID, c.RequestID))
+			events = append(events, ep.NewEventUniqueRegistryValueReleased(r.id, c.Value, c.ID, c.RequestID))
 		}
 	}
 	// ignore release for not reserved value or different id
@@ -138,20 +139,20 @@ func (r *UniqueValueRegistry) ApplyEvents(events []*eventstore.StoredEvent) erro
 func (r *UniqueValueRegistry) ApplyEvent(event *eventstore.StoredEvent) error {
 	log.Debugf("event: %v", event)
 
-	data, err := event.UnmarshalData()
+	data, err := ep.UnmarshalData(event)
 	if err != nil {
 		return err
 	}
 
 	r.version = event.Version
 
-	switch event.EventType {
-	case eventstore.EventTypeUniqueRegistryValueReserved:
-		data := data.(*eventstore.EventUniqueRegistryValueReserved)
+	switch ep.EventType(event.EventType) {
+	case ep.EventTypeUniqueRegistryValueReserved:
+		data := data.(*ep.EventUniqueRegistryValueReserved)
 		r.values[data.Value] = data.ID
 		r.reserveRequests[data.RequestID] = struct{}{}
-	case eventstore.EventTypeUniqueRegistryValueReleased:
-		data := data.(*eventstore.EventUniqueRegistryValueReleased)
+	case ep.EventTypeUniqueRegistryValueReleased:
+		data := data.(*ep.EventUniqueRegistryValueReleased)
 		delete(r.values, data.Value)
 		r.releaseRequests[data.RequestID] = struct{}{}
 	}

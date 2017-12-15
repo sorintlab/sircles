@@ -3,7 +3,9 @@ package eventhandler
 import (
 	"fmt"
 
+	"github.com/sorintlab/sircles/aggregate"
 	"github.com/sorintlab/sircles/common"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/saga"
 	"github.com/sorintlab/sircles/util"
@@ -30,7 +32,7 @@ func (r *MemberRequestHandler) HandleEvents() error {
 	log.Debugf("HandleEvents")
 
 	for {
-		event, err := r.es.GetLastEvent(eventstore.MemberRequestHandlerID.String())
+		event, err := r.es.GetLastEvent(aggregate.MemberRequestHandlerID.String())
 		if err != nil {
 			return err
 		}
@@ -39,24 +41,24 @@ func (r *MemberRequestHandler) HandleEvents() error {
 		var version int64
 
 		if event != nil {
-			data, err := event.UnmarshalData()
+			data, err := ep.UnmarshalData(event)
 			if err != nil {
 				return err
 			}
 
-			curMCSn = data.(*eventstore.EventMemberRequestHandlerStateUpdated).MemberChangeSequenceNumber
-			curMSn = data.(*eventstore.EventMemberRequestHandlerStateUpdated).MemberSequenceNumber
+			curMCSn = data.(*ep.EventMemberRequestHandlerStateUpdated).MemberChangeSequenceNumber
+			curMSn = data.(*ep.EventMemberRequestHandlerStateUpdated).MemberSequenceNumber
 			version = event.Version
 		}
 
 		log.Debugf("curMCSn: %d", curMCSn)
 		log.Debugf("curMSn: %d", curMSn)
 
-		mcEvents, err := r.es.GetEventsByCategory(eventstore.MemberChangeAggregate.String(), curMCSn+1, 100)
+		mcEvents, err := r.es.GetEventsByCategory(aggregate.MemberChangeAggregate.String(), curMCSn+1, 100)
 		if err != nil {
 			return err
 		}
-		mEvents, err := r.es.GetEventsByCategory(eventstore.MemberAggregate.String(), curMSn+1, 100)
+		mEvents, err := r.es.GetEventsByCategory(aggregate.MemberAggregate.String(), curMSn+1, 100)
 		if err != nil {
 			return err
 		}
@@ -84,14 +86,14 @@ func (r *MemberRequestHandler) HandleEvents() error {
 		log.Debugf("mSn: %d", mSn)
 
 		if mcSn != curMCSn || mSn != curMSn {
-			stateEvent := eventstore.NewEventMemberRequestHandlerStateUpdated(mcSn, mSn)
+			stateEvent := ep.NewEventMemberRequestHandlerStateUpdated(mcSn, mSn)
 
-			eventsData, err := eventstore.GenEventData([]eventstore.Event{stateEvent}, nil, nil, nil, nil)
+			eventsData, err := ep.GenEventData([]ep.Event{stateEvent}, nil, nil, nil, nil)
 			if err != nil {
 				return err
 			}
 
-			if _, err = r.es.WriteEvents(eventsData, eventstore.MemberRequestHandlerAggregate.String(), eventstore.MemberRequestHandlerID.String(), version); err != nil {
+			if _, err = r.es.WriteEvents(eventsData, aggregate.MemberRequestHandlerAggregate.String(), aggregate.MemberRequestHandlerID.String(), version); err != nil {
 				return err
 			}
 		}
@@ -103,50 +105,50 @@ func (r *MemberRequestHandler) HandleEvents() error {
 func (r *MemberRequestHandler) handleEvent(event *eventstore.StoredEvent) error {
 	log.Debugf("event: %v", event)
 
-	data, err := event.UnmarshalData()
+	data, err := ep.UnmarshalData(event)
 	if err != nil {
 		return err
 	}
 
-	switch event.EventType {
-	case eventstore.EventTypeMemberChangeCreateRequested:
+	switch ep.EventType(event.EventType) {
+	case ep.EventTypeMemberChangeCreateRequested:
 		memberChangeID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
 		return r.callSaga(memberChangeID, event)
 
-	case eventstore.EventTypeMemberChangeUpdateRequested:
+	case ep.EventTypeMemberChangeUpdateRequested:
 		memberChangeID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
 		return r.callSaga(memberChangeID, event)
 
-	case eventstore.EventTypeMemberChangeSetMatchUIDRequested:
+	case ep.EventTypeMemberChangeSetMatchUIDRequested:
 		memberChangeID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
 		return r.callSaga(memberChangeID, event)
 
-	case eventstore.EventTypeMemberChangeCompleted:
+	case ep.EventTypeMemberChangeCompleted:
 		memberChangeID, err := util.IDFromString(event.StreamID)
 		if err != nil {
 			return err
 		}
 		return r.callSaga(memberChangeID, event)
 
-	case eventstore.EventTypeMemberCreated:
-		data := data.(*eventstore.EventMemberCreated)
+	case ep.EventTypeMemberCreated:
+		data := data.(*ep.EventMemberCreated)
 		return r.callSaga(data.MemberChangeID, event)
 
-	case eventstore.EventTypeMemberUpdated:
-		data := data.(*eventstore.EventMemberUpdated)
+	case ep.EventTypeMemberUpdated:
+		data := data.(*ep.EventMemberUpdated)
 		return r.callSaga(data.MemberChangeID, event)
 
-	case eventstore.EventTypeMemberMatchUIDSet:
-		data := data.(*eventstore.EventMemberMatchUIDSet)
+	case ep.EventTypeMemberMatchUIDSet:
+		data := data.(*ep.EventMemberMatchUIDSet)
 		return r.callSaga(data.MemberChangeID, event)
 	}
 
@@ -154,7 +156,7 @@ func (r *MemberRequestHandler) handleEvent(event *eventstore.StoredEvent) error 
 }
 
 func (r *MemberRequestHandler) callSaga(memberChangeID util.ID, event *eventstore.StoredEvent) error {
-	metaData, err := event.UnmarshalMetaData()
+	metaData, err := ep.UnmarshalMetaData(event)
 	if err != nil {
 		return err
 	}
@@ -175,11 +177,11 @@ func (r *MemberRequestHandler) callSaga(memberChangeID util.ID, event *eventstor
 	causationID := event.ID
 	correlationID := *metaData.CorrelationID
 	groupID := r.uidGenerator.UUID("")
-	eventsData, err := eventstore.GenEventData(events, &correlationID, &causationID, &groupID, nil)
+	eventsData, err := ep.GenEventData(events, &correlationID, &causationID, &groupID, nil)
 	if err != nil {
 		return err
 	}
-	if _, err = r.es.WriteEvents(eventsData, eventstore.MemberRequestSagaAggregate.String(), saganame, s.Version()); err != nil {
+	if _, err = r.es.WriteEvents(eventsData, aggregate.MemberRequestSagaAggregate.String(), saganame, s.Version()); err != nil {
 		return err
 	}
 	return nil

@@ -60,17 +60,10 @@ func (s *EventStore) SetTimeGenerator(tg common.TimeGenerator) {
 
 func scanEvent(rows *sql.Rows) (*StoredEvent, error) {
 	e := StoredEvent{}
-	var data, metaData []byte
-	// To make sqlite3 happy
-	var eventType, category string
-	fields := []interface{}{&e.ID, &e.SequenceNumber, &eventType, &category, &e.StreamID, &e.Timestamp, &e.Version, &data, &metaData}
+	fields := []interface{}{&e.ID, &e.SequenceNumber, &e.EventType, &e.Category, &e.StreamID, &e.Timestamp, &e.Version, &e.Data, &e.MetaData}
 	if err := rows.Scan(fields...); err != nil {
 		return nil, errors.Wrap(err, "error scanning event")
 	}
-	e.EventType = EventType(eventType)
-	e.Category = category
-	e.Data = data
-	e.MetaData = metaData
 	return &e, nil
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 	"github.com/sorintlab/sircles/command/commands"
+	ep "github.com/sorintlab/sircles/events"
 	"github.com/sorintlab/sircles/eventstore"
 	"github.com/sorintlab/sircles/util"
 )
@@ -33,7 +34,7 @@ type testData struct {
 	Aggregate Aggregate
 	State     []*eventstore.StoredEvent
 	Command   *commands.Command
-	Out       []eventstore.Event
+	Out       []ep.Event
 	Err       error
 }
 
@@ -62,7 +63,7 @@ func runTest(t *testing.T, test *testData) {
 	}
 }
 
-func toStoredEvents(events []eventstore.Event, aggregateType eventstore.AggregateType, aggregateID string) ([]*eventstore.StoredEvent, error) {
+func toStoredEvents(events []ep.Event, aggregateType AggregateType, aggregateID string) ([]*eventstore.StoredEvent, error) {
 	storedEvents := make([]*eventstore.StoredEvent, len(events))
 	var version int64 = 1
 	for i, e := range events {
@@ -80,7 +81,7 @@ func toStoredEvents(events []eventstore.Event, aggregateType eventstore.Aggregat
 
 		e := &eventstore.StoredEvent{
 			ID:        util.NewFromUUID(uuid.NewV4()),
-			EventType: e.EventType(),
+			EventType: e.EventType().String(),
 			Category:  aggregateType.String(),
 			StreamID:  aggregateID,
 			Data:      data,
