@@ -208,7 +208,7 @@ class CreateRole extends React.Component {
       }
       return (
         <Form.Field>
-          <label>Select which role to move from parent circle</label>
+          <label>Select which role to move from parent Sircle</label>
           {selection}
         </Form.Field>
       )
@@ -258,7 +258,7 @@ class CreateRole extends React.Component {
         <Form.Field>
           <Button onClick={this.handleAddNewAccountability}>Add accountability</Button>
         </Form.Field>
-        <Form.Checkbox label='Circle' name='circle' checked={role.roleType === 'circle'} onChange={this.handleCircleChange} />
+        <Form.Checkbox label='Sircle' name='circle' checked={role.roleType === 'circle'} onChange={this.handleCircleChange} />
         { role.roleType === 'circle' ? <RolesFromParentSelection /> : null }
         <Form.Field width='two'><Button primary type='submit' disabled={submitting}>Save</Button></Form.Field>
         <Message negative hidden={!showError} onDismiss={this.handleErrorMessageDismiss}>
