@@ -1,7 +1,7 @@
 import React, { PropTypes } from 'react'
 import { graphql, compose } from 'react-apollo'
 import gql from 'graphql-tag'
-import { Modal, Container, Form, Button, Table, Icon, Message, Divider } from 'semantic-ui-react'
+import { Modal, Container, Form, Button, Table, Icon, Message, Divider, Popup } from 'semantic-ui-react'
 import moment from 'moment'
 
 import { withError } from '../modules/Error'
@@ -131,7 +131,11 @@ class CircleSetCoreRoleMember extends React.Component {
                 { role.roleMembers.map(roleMember => (
                   <Table.Row key={roleMember.member.uid}>
                     <Table.Cell>
-                      {roleMember.member.userName}
+                      <Popup content={roleMember.member.FullName} trigger={
+                        <span>
+                          {roleMember.member.UserName}
+                        </span>
+                      } />
                     </Table.Cell>
                     {role.roleType !== 'leadlink' &&
                     <Table.Cell>
@@ -221,6 +225,7 @@ const CoreRoleMemberQuery = gql`
         member {
           uid
           userName
+          fullName
         }
         electionExpiration
       }
