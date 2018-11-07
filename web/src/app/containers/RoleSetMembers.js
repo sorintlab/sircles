@@ -116,7 +116,7 @@ class RoleSetMembers extends React.Component {
                 {role.roleType === 'normal' &&
                 <Form.Input name='focus' placeholder='Focus' value={focus} onChange={this.handleFocusChange} />
                 }
-                <Form.Field width='two'><Button primary type='submit' disabled={!submitFormValid}>Add</Button></Form.Field>
+                <Form.Field width='four'><Button primary type='submit' disabled={!submitFormValid}>Add</Button></Form.Field>
               </Form.Group>
             </Form>
             <Message negative hidden={!showError} onDismiss={this.handleErrorMessageDismiss}>
