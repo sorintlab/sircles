@@ -375,6 +375,10 @@ class EditMember extends React.Component {
       if (curMember.password !== curMember.repeatPassword) disabled = true
     }
 
+    if (type === 'new') {
+      if (curMember.password !== curMember.repeatPassword) disabled = true
+    }
+
     if (profileCreated) {
       return (
         <Message positive>
