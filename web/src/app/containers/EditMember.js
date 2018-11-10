@@ -371,7 +371,7 @@ class EditMember extends React.Component {
 
     let disabled = false
 
-    if (edit) {
+    if ((edit) || (type === 'new')) {
       if (curMember.password !== curMember.repeatPassword) disabled = true
     }
 
