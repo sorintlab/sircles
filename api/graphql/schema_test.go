@@ -30,7 +30,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	graphql "github.com/neelance/graphql-go"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 func init() {
@@ -3175,6 +3175,86 @@ func TestCreateMemberExistingEmail(t *testing.T) {
 			{
 				"createMember": {
 					"hasErrors": true
+				}
+			}
+			`,
+		},
+	})
+}
+
+func TestSetMemberPassword(t *testing.T) {
+	RunTests(t, initBasic, []*Test{
+		{
+			Query: `
+			mutation SetMemberPassword($memberUID: ID!, $curPassword: String, $newPassword: String!) {
+				setMemberPassword(memberUID: $memberUID, curPassword: $curPassword, newPassword: $newPassword) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"memberUID": "bace0701-15e3-5144-97c5-47487d543032",
+				"curPassword": "password",
+				"newPassword": "newPassword"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"setMemberPassword": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+	})
+}
+
+func TestSetMemberMatchUID(t *testing.T) {
+	RunTests(t, initBasic, []*Test{
+		{
+			Query: `
+			mutation SetMemberMatchUID($memberUID: ID!, $matchUID: String!) {
+				setMemberMatchUID(memberUID: $memberUID, matchUID: $matchUID) {
+					hasErrors
+				}
+			}
+			`,
+			Variables: `
+			{
+				"memberUID": "bace0701-15e3-5144-97c5-47487d543032",
+				"matchUID": "newMatchUID"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"setMemberMatchUID": {
+					"hasErrors": false
+				}
+			}
+			`,
+		},
+		// change to the same matchuid
+		{
+			Query: `
+			mutation SetMemberMatchUID($memberUID: ID!, $matchUID: String!) {
+				setMemberMatchUID(memberUID: $memberUID, matchUID: $matchUID) {
+					hasErrors
+					genericError
+				}
+			}
+			`,
+			Variables: `
+			{
+				"memberUID": "bace0701-15e3-5144-97c5-47487d543032",
+				"matchUID": "newMatchUID"
+			}
+			`,
+			ExpectedResult: `
+			{
+				"setMemberMatchUID": {
+					"hasErrors": true,
+					"genericError":"matchUID already in use"
 				}
 			}
 			`,
