@@ -19,7 +19,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 var log = slog.S()
@@ -2891,6 +2891,25 @@ func (h *DBEventHandler) handleEvent(event *eventstore.StoredEvent, tx *db.Tx, s
 			return err
 		}
 
+	case ep.EventTypeMemberMatchUIDSet:
+		data := data.(*ep.EventMemberMatchUIDSet)
+		memberID, err := util.IDFromString(event.StreamID)
+		if err != nil {
+			return err
+		}
+		err = tx.Do(func(tx *db.WrappedTx) error {
+			if _, err := tx.Exec("delete from membermatch where memberid = $1", memberID); err != nil {
+				return errors.Wrap(err, "failed to delete matchuid")
+			}
+			if _, err := tx.Exec("insert into membermatch (memberid, matchuid) values ($1, $2)", memberID, data.MatchUID); err != nil {
+				return errors.Wrap(err, "failed to insert matchuid")
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
 	case ep.EventTypeMemberAvatarSet:
 		data := data.(*ep.EventMemberAvatarSet)
 		memberID, err := util.IDFromString(event.StreamID)
@@ -3224,6 +3243,7 @@ func (h *DBEventHandler) handleEvent(event *eventstore.StoredEvent, tx *db.Tx, s
 
 	case ep.EventTypeMemberPasswordSet:
 		//data := data.(*ep.EventMemberPasswordSet)
+	case ep.EventTypeMemberMatchUIDSet:
 
 	case ep.EventTypeMemberAvatarSet:
 		//data := data.(*ep.EventMemberAvatarSet)

@@ -1193,7 +1193,7 @@ func (s *CommandService) setMemberMatchUID(ctx context.Context, memberID util.ID
 
 	correlationID := s.uidGenerator.UUID("")
 	causationID := s.uidGenerator.UUID("")
-	command := commands.NewCommand(commands.CommandTypeRequestSetMemberMatchUID, correlationID, causationID, callingMemberID, &commands.RequestSetMemberMatchUID{member.ID, matchUID})
+	command := commands.NewCommand(commands.CommandTypeRequestSetMemberMatchUID, correlationID, causationID, callingMemberID, &commands.RequestSetMemberMatchUID{memberID, matchUID})
 
 	memberChangeID := s.uidGenerator.UUID("")
 	mcr := aggregate.NewMemberChangeRepository(s.es, s.uidGenerator)

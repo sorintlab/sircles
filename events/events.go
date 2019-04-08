@@ -845,7 +845,9 @@ type EventMemberMatchUIDSet struct {
 
 func NewEventMemberMatchUIDSet(memberID util.ID, memberChangeID util.ID, matchUID, prevMatchUID string) *EventMemberMatchUIDSet {
 	return &EventMemberMatchUIDSet{
-		MatchUID: matchUID,
+		MemberChangeID: memberChangeID,
+		MatchUID:       matchUID,
+		PrevMatchUID:   prevMatchUID,
 	}
 }
 
