@@ -354,7 +354,7 @@ func (r *SearchRequest) UnmarshalJSON(input []byte) error {
 // for the Query, using default values for all
 // other search parameters.
 func NewSearchRequest(q query.Query) *SearchRequest {
-	return NewSearchRequestOptions(q, 10, 0, false)
+	return NewSearchRequestOptions(q, 100, 0, false)
 }
 
 // NewSearchRequestOptions creates a new SearchRequest

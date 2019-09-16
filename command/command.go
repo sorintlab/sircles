@@ -36,7 +36,7 @@ const (
 	MaxRoleAdditionalContentLength = 1000 * 1000 // 1M of chars
 
 	MinMemberUserNameLength = 3
-	MaxMemberUserNameLength = 30
+	MaxMemberUserNameLength = 40
 	MinMemberFullNameLength = 3
 	MaxMemberFullNameLength = 100
 	MaxMemberEmailLength    = 100
@@ -52,7 +52,7 @@ const (
 	MaxRoleAssignmentFocusLength = 30
 )
 
-var UserNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*([-]?[a-zA-Z0-9]+)+$`)
+var UserNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9]*([-||.||_]?[a-zA-Z0-9]+)+$`)
 
 var (
 	ErrValidation = errors.New("validation error")
