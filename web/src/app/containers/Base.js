@@ -1,7 +1,7 @@
 import React, { PropTypes } from 'react'
 import { graphql, compose } from 'react-apollo'
 import { Route, Link, Switch } from 'react-router-dom'
-import { Container, Menu, Dropdown, Message, Form, Input, Button } from 'semantic-ui-react'
+import { Container, Menu, Dropdown, Message, Form, Input, Button, Image } from 'semantic-ui-react'
 
 import config from 'config'
 import Auth from '../modules/Auth'
@@ -22,6 +22,8 @@ import Tension from './Tension'
 import EditTension from './EditTension'
 import SearchPage from './SearchPage'
 import Settings from './Settings'
+
+import sirclesLogo from '../../www/img/sircles.png'
 
 class Base extends React.Component {
   getChildContext () {
@@ -121,7 +123,9 @@ class Base extends React.Component {
     return (
       <div>
         <Menu inverted>
-          <Menu.Item as={Link} to='/'>Sircles</Menu.Item>
+          <Menu.Item as={Link} to='/'>
+            <Image size='tiny' src={sirclesLogo} />
+          </Menu.Item>
           {viewer && (
             <Menu.Item as={Form} onSubmit={this.doSearch}>
               <Input icon='search' placeholder='Search...' value={searchString} onChange={this.handleSearchChange} />
