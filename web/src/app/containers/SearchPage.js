@@ -2,7 +2,7 @@ import React, { PropTypes } from 'react'
 import { graphql, compose } from 'react-apollo'
 import gql from 'graphql-tag'
 import { Link } from 'react-router-dom'
-import { Container, Label, Segment, Message } from 'semantic-ui-react'
+import { Container, Label, Segment, Message, Popup } from 'semantic-ui-react'
 
 import Util from '../modules/Util'
 import Avatar from '../components/Avatar'
@@ -70,7 +70,11 @@ class SearchPage extends React.Component {
               <Segment>
                 <Link to={memberLink}>
                   <Avatar uid={hit.id} size={30} inline spaced shape='rounded' />
-                  {hit.fields.UserName}
+                  <Popup content={hit.fields.FullName} trigger={
+                    <span>
+                      {hit.fields.UserName}
+                    </span>
+                  } />
                 </Link>
                 <Label className='labelright' color='green' horizontal basic size='tiny'>Member</Label>
               </Segment>

@@ -114,6 +114,7 @@ const RolePageQuery = gql`
           member {
             uid
             userName
+            fullName
           }
           isCoreMember
           isDirectMember
@@ -129,6 +130,7 @@ const RolePageQuery = gql`
           member {
             uid
             userName
+            fullName
           }
           focus
           electionExpiration
@@ -141,6 +143,7 @@ const RolePageQuery = gql`
             member {
               uid
               userName
+              fullName
             }
           }
         }
@@ -149,6 +152,7 @@ const RolePageQuery = gql`
         member {
           uid
           userName
+          fullName
           roles {
             role {
               uid
@@ -173,6 +177,7 @@ const RolePageQuery = gql`
         member {
           uid
           userName
+          fullName
         }
         focus
         electionExpiration
@@ -186,6 +191,7 @@ const RolePageQuery = gql`
         member {
           uid
           userName
+          fullName
         }
       }
     }
@@ -211,6 +217,7 @@ const RoleEventsQuery = gql`
               issuer {
                 uid
                 userName
+                fullName
               }
               changedRoles {
                 changeType
@@ -283,6 +290,7 @@ const ViewerQuery = gql`
       member {
         uid
         userName
+        fullName
         circles {
           role {
             uid
