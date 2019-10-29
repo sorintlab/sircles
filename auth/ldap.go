@@ -308,7 +308,7 @@ func (c *ldapMemberProvider) UserEntry(conn *ldap.Conn, searchData *searchData) 
 
 	resp, err := conn.Search(req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "ldap search with filter %q failed: %v", req.Filter)
+		return nil, errors.Wrapf(err, "ldap search with filter %q failed", req.Filter)
 	}
 
 	switch n := len(resp.Entries); n {

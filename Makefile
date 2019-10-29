@@ -50,7 +50,7 @@ bin/sircles: $(SIRCLES_DEPS) $(SIRCLES_SRC)
 
 # build the binary inside a docker container. Now we use a glibc based golang image to match the fedora base image used in the Dockerfile of the demo but can be changed to use a musl libc based image like alpine
 bin/sircles-dockerdemo: $(SIRCLES_WEBBUNDLE_DEPS) $(SIRCLES_WEBBUNDLE_SRC)
-	docker run --rm -v "$(PROJDIR)":/go/src/$(REPO_PATH) -w /go/src/$(REPO_PATH) golang:1.9 go build -tags webbundle -ldflags $(LD_FLAGS) -o /go/src/${REPO_PATH}/bin/sircles-dockerdemo $(REPO_PATH)/cmd/sircles
+	docker run --rm -v "$(PROJDIR)":/go/src/$(REPO_PATH) -w /go/src/$(REPO_PATH) golang:1.11 go build -tags webbundle -ldflags $(LD_FLAGS) -o /go/src/${REPO_PATH}/bin/sircles-dockerdemo $(REPO_PATH)/cmd/sircles
 
 .PHONY: dockerdemo
 dockerdemo: bin/sircles-dockerdemo
@@ -73,7 +73,7 @@ dist-web-bindata: webbundle/bindata.go
 
 # TODO(sgotti) vendor tools (won't use glide since it's not a dependency)
 tools/bin/go-bindata:
-	GOBIN=$(PROJDIR)/tools/bin go get github.com/jteeuwen/go-bindata/...
+	GOBIN=$(PROJDIR)/tools/bin go get github.com/go-bindata/go-bindata/go-bindata
 
 tools/bin/gocovmerge:
 	GOBIN=$(PROJDIR)/tools/bin go get github.com/wadey/gocovmerge

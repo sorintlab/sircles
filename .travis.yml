@@ -1,15 +1,16 @@
 language: go
 
 go:
-  - 1.9.x
+  - 1.10.x
+  - 1.11.x
 
 # make build of forked repos work on travis (the forked repo contents will be
 # copied inside the right path)
 go_import_path: github.com/sorintlab/sircles
 
 env:
-  - TARGET=amd64
-  - TARGET=arm64
+  - TARGET=amd64 GO111MODULE=on
+  - TARGET=arm64 GO111MODULE=on
 
 addons:
   apt:

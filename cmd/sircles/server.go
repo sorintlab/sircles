@@ -305,14 +305,14 @@ func serve(cmd *cobra.Command, args []string) error {
 		log.Infof("http listening on %s", c.Web.HTTP)
 		go func() {
 			err := http.ListenAndServe(c.Web.HTTP, mainrouter)
-			listenErrChan <- errors.Wrapf(err, "listening on %s failed: %v", c.Web.HTTP)
+			listenErrChan <- errors.Wrapf(err, "listening on %s failed", c.Web.HTTP)
 		}()
 	}
 	if c.Web.HTTPS != "" {
 		log.Infof("https listening on %s", c.Web.HTTPS)
 		go func() {
 			err := http.ListenAndServeTLS(c.Web.HTTPS, c.Web.TLSCert, c.Web.TLSKey, mainrouter)
-			listenErrChan <- errors.Wrapf(err, "listening on %s failed: %v", c.Web.HTTPS)
+			listenErrChan <- errors.Wrapf(err, "listening on %s failed", c.Web.HTTPS)
 		}()
 	}
 

@@ -1,0 +1,164 @@
+# github.com/Masterminds/squirrel v0.0.0-20161115235646-20f192218cf5
+github.com/Masterminds/squirrel
+# github.com/asaskevich/govalidator v0.0.0-20160518190739-766470278477
+github.com/asaskevich/govalidator
+# github.com/blevesearch/bleve v0.0.0-20170912131015-6eea5b78da00
+github.com/blevesearch/bleve
+github.com/blevesearch/bleve/analysis/analyzer/custom
+github.com/blevesearch/bleve/analysis/token/lowercase
+github.com/blevesearch/bleve/analysis/tokenizer/regexp
+github.com/blevesearch/bleve/mapping
+github.com/blevesearch/bleve/analysis
+github.com/blevesearch/bleve/analysis/datetime/optional
+github.com/blevesearch/bleve/document
+github.com/blevesearch/bleve/index
+github.com/blevesearch/bleve/index/store
+github.com/blevesearch/bleve/index/store/boltdb
+github.com/blevesearch/bleve/index/store/gtreap
+github.com/blevesearch/bleve/index/upsidedown
+github.com/blevesearch/bleve/registry
+github.com/blevesearch/bleve/search
+github.com/blevesearch/bleve/search/collector
+github.com/blevesearch/bleve/search/facet
+github.com/blevesearch/bleve/search/highlight
+github.com/blevesearch/bleve/search/highlight/highlighter/html
+github.com/blevesearch/bleve/search/query
+github.com/blevesearch/bleve/analysis/analyzer/standard
+github.com/blevesearch/bleve/geo
+github.com/blevesearch/bleve/analysis/datetime/flexible
+github.com/blevesearch/bleve/numeric
+github.com/blevesearch/bleve/search/highlight/format/html
+github.com/blevesearch/bleve/search/highlight/fragmenter/simple
+github.com/blevesearch/bleve/search/highlight/highlighter/simple
+github.com/blevesearch/bleve/search/searcher
+github.com/blevesearch/bleve/analysis/lang/en
+github.com/blevesearch/bleve/analysis/tokenizer/unicode
+github.com/blevesearch/bleve/search/scorer
+github.com/blevesearch/bleve/analysis/token/porter
+github.com/blevesearch/bleve/analysis/token/stop
+# github.com/blevesearch/go-porterstemmer v0.0.0-20141230013033-23a2c8e5cf1f
+github.com/blevesearch/go-porterstemmer
+# github.com/blevesearch/segment v0.0.0-20160105220820-db70c57796cc
+github.com/blevesearch/segment
+# github.com/boltdb/bolt v0.0.0-20160407143438-144418e1475d
+github.com/boltdb/bolt
+# github.com/coreos/go-oidc v0.0.0-20171002155002-a93f71fdfe73
+github.com/coreos/go-oidc
+# github.com/davecgh/go-spew v1.1.0
+github.com/davecgh/go-spew/spew
+# github.com/dchest/siphash v1.0.0
+github.com/dchest/siphash
+# github.com/dgrijalva/jwt-go v3.0.0+incompatible
+github.com/dgrijalva/jwt-go
+github.com/dgrijalva/jwt-go/request
+# github.com/disintegration/imaging v1.1.0
+github.com/disintegration/imaging
+# github.com/elazarl/go-bindata-assetfs v1.0.0
+github.com/elazarl/go-bindata-assetfs
+# github.com/ghodss/yaml v1.0.0
+github.com/ghodss/yaml
+# github.com/go-bindata/go-bindata v1.0.0
+github.com/go-bindata/go-bindata/go-bindata
+github.com/go-bindata/go-bindata
+# github.com/golang/protobuf v1.2.0
+github.com/golang/protobuf/proto
+# github.com/gorilla/context v0.0.0-20141126163405-50c25fb3b2b3
+github.com/gorilla/context
+# github.com/gorilla/handlers v0.0.0-20161206055144-3a5767ca75ec
+github.com/gorilla/handlers
+# github.com/gorilla/mux v1.3.0
+github.com/gorilla/mux
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/lann/builder v0.0.0-20150808151131-f22ce00fd939
+github.com/lann/builder
+# github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0
+github.com/lann/ps
+# github.com/lib/pq v0.0.0-20160831222520-50761b0867bd
+github.com/lib/pq
+github.com/lib/pq/oid
+# github.com/mattn/go-sqlite3 v1.4.0
+github.com/mattn/go-sqlite3
+# github.com/neelance/graphql-go v0.0.0-20170509230557-00c4c5743b2f
+github.com/neelance/graphql-go
+github.com/neelance/graphql-go/errors
+github.com/neelance/graphql-go/internal/common
+github.com/neelance/graphql-go/internal/exec
+github.com/neelance/graphql-go/internal/exec/resolvable
+github.com/neelance/graphql-go/internal/exec/selected
+github.com/neelance/graphql-go/internal/query
+github.com/neelance/graphql-go/internal/schema
+github.com/neelance/graphql-go/internal/validation
+github.com/neelance/graphql-go/introspection
+github.com/neelance/graphql-go/log
+github.com/neelance/graphql-go/trace
+github.com/neelance/graphql-go/internal/lexer
+# github.com/nicksrandall/dataloader v0.0.0-20170406204300-9429e9b02123
+github.com/nicksrandall/dataloader
+# github.com/opentracing/opentracing-go v0.0.0-20171003133519-1361b9cd60be
+github.com/opentracing/opentracing-go
+github.com/opentracing/opentracing-go/ext
+github.com/opentracing/opentracing-go/log
+# github.com/pkg/errors v0.8.0
+github.com/pkg/errors
+# github.com/pquerna/cachecontrol v0.0.0-20171018203845-0dec1b30a021
+github.com/pquerna/cachecontrol
+github.com/pquerna/cachecontrol/cacheobject
+# github.com/renstrom/shortuuid v0.0.0-20160220084802-d728e00b727d
+github.com/renstrom/shortuuid
+# github.com/satori/go.uuid v1.1.0
+github.com/satori/go.uuid
+# github.com/spf13/cobra v0.0.1
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.0
+github.com/spf13/pflag
+# github.com/steveyen/gtreap v0.0.0-20150807155958-0abe01ef9be2
+github.com/steveyen/gtreap
+# github.com/wadey/gocovmerge v0.0.0-20160331181800-b5bfa59ec0ad
+github.com/wadey/gocovmerge
+# go.uber.org/atomic v1.3.1
+go.uber.org/atomic
+# go.uber.org/zap v1.3.0
+go.uber.org/zap/zapcore
+go.uber.org/zap
+go.uber.org/zap/buffer
+go.uber.org/zap/internal/bufferpool
+go.uber.org/zap/internal/color
+go.uber.org/zap/internal/exit
+go.uber.org/zap/internal/multierror
+# golang.org/x/crypto v0.0.0-20171113213409-9f005a07e0d3
+golang.org/x/crypto/bcrypt
+golang.org/x/crypto/blowfish
+golang.org/x/crypto/ed25519
+golang.org/x/crypto/ed25519/internal/edwards25519
+# golang.org/x/image v0.0.0-20171013013600-f7e31b4ea2e3
+golang.org/x/image/bmp
+golang.org/x/image/tiff
+golang.org/x/image/tiff/lzw
+# golang.org/x/net v0.0.0-20180906233101-161cd47e91fd
+golang.org/x/net/context
+# golang.org/x/oauth2 v0.0.0-20170412232759-a6bd8cefa181
+golang.org/x/oauth2
+golang.org/x/oauth2/internal
+# golang.org/x/sys v0.0.0-20180909124046-d0be0721c37e
+golang.org/x/sys/unix
+# golang.org/x/tools v0.0.0-20181113152950-150d8ac28524
+golang.org/x/tools/cover
+# google.golang.org/appengine v0.0.0-20170921170648-24e4144ec923
+google.golang.org/appengine/urlfetch
+google.golang.org/appengine/internal
+google.golang.org/appengine/internal/urlfetch
+google.golang.org/appengine/internal/base
+google.golang.org/appengine/internal/datastore
+google.golang.org/appengine/internal/log
+google.golang.org/appengine/internal/remote_api
+# gopkg.in/asn1-ber.v1 v1.0.0-20170511165959-379148ca0225
+gopkg.in/asn1-ber.v1
+# gopkg.in/ldap.v2 v2.5.0
+gopkg.in/ldap.v2
+# gopkg.in/square/go-jose.v2 v2.1.3
+gopkg.in/square/go-jose.v2
+gopkg.in/square/go-jose.v2/cipher
+gopkg.in/square/go-jose.v2/json
+# gopkg.in/yaml.v2 v2.2.1
+gopkg.in/yaml.v2

@@ -275,7 +275,7 @@ func (s *MemberRequestSaga) HandleEvent(event *eventstore.StoredEvent) ([]ep.Eve
 
 			}
 
-			if err := s.completeMemberChange(correlationID, causationID, memberChangeID, fmt.Sprintf("error updating member: %v, err")); err != nil {
+			if err := s.completeMemberChange(correlationID, causationID, memberChangeID, fmt.Sprintf("error updating member: %v", err)); err != nil {
 				return nil, err
 			}
 			return nil, err
