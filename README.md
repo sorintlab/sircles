@@ -14,6 +14,13 @@
   * Manage members
   * Basic search
 
+## Sircles Specification 
+
+In the next weeks (as of 13/Nov/2017) we'll publish our Sircles specification where we'll document the outcomes of our experiences implementing the Sorint.Lab organizational model. Sircles will then receive all the required changes to implement the Sircles specification.
+
+Stay tuned!
+
+
 ## Architecture
 
 The sircles core (backend) is written in Go and exposes a GraphQL API.
