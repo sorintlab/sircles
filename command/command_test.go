@@ -10,6 +10,10 @@ var (
 		"foo1",
 		"foo-1",
 		"foo-1-bar",
+		"foo.bar",
+		"foo_bar",
+		"foo.bar_hey",
+		"foo_bar.hello",
 		"f12oo-bar33",
 	}
 	badUserNames = []string{
@@ -18,10 +22,11 @@ var (
 		"-foo-bar",
 		"foo-bar-",
 		"foo--bar",
-		"foo.bar",
-		"foo_bar",
 		"foo#bar",
 		"1foobar",
+		"1foobar",
+		"_foobar",
+		".foobar",
 	}
 )
 
